@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema(
       required: true,
       //match: [/^[A-Za-z]+$/, "Character not valid"],
     },
-    username: {
+    lastname: {
       type: String,
       required: true,
       //match: [/^[A-Za-z]+$/, "Character not valid"],
@@ -21,6 +21,10 @@ const userSchema = new mongoose.Schema(
       match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/, "Email not valid"],
     },
     password: {
+      type: String,
+      required: true,
+    },
+    phone: {
       type: String,
       required: true,
     },

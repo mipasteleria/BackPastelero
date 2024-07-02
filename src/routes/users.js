@@ -20,14 +20,11 @@ router.post("/login", async (req, res) => {
   try {
     const user = ({ email, password } = req.body);
     const users = await User.findOne({ email: email });
-    console.log(user);
-    console.log(users);
-
     if (!user || !(await User.isValidPassword(password, users.password))) {
       res.status(401).send({ message: "Invalid email or password" });
     } else {
       const token = await User.createToken({ _id: user._id, name: user.name });
-      res.status(201).send({ message: "Login Succes", data: token });
+      res.status(201).send({ message: "Login Success", data: token });
     }
   } catch (error) {
     res.status(400).send({ message: error });
