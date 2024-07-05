@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/users");
 
-// Create Account
 router.post("/", async (req, res) => {
   try {
     const user = req.body;
@@ -15,7 +14,6 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Log In
 router.post("/login", async (req, res) => {
   try {
     const user = ({ email, password } = req.body);

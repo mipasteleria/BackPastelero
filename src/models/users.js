@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    userType: {
+      type: String,
+      isAdmin: true,
+    },
   },
   {
     timestamps: true,
