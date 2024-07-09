@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    userType: {
+    role: {
       type: String,
       isAdmin: true,
     },

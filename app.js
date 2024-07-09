@@ -4,6 +4,7 @@ const app = express();
 const port = 3001;
 const mongoDB = require("./src/database/db.js");
 const usersRoutes = require("./src/routes/users");
+const pricesRoutes = require("./src/routes/pastelCotiza.js");
 
 const cors = require("cors");
 const corsOptions = {
@@ -17,6 +18,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use("/users", usersRoutes);
+app.use("/price", pricesRoutes);
 
 mongoDB.connect
   .then((message) => {
