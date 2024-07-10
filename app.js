@@ -4,7 +4,8 @@ const app = express();
 const port = 3001;
 const mongoDB = require("./src/database/db.js");
 const usersRoutes = require("./src/routes/users");
-const pricesRoutes = require("./src/routes/pastelCotiza.js");
+const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
+const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
 
 const cors = require("cors");
 const corsOptions = {
@@ -18,7 +19,8 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 app.use("/users", usersRoutes);
-app.use("/price", pricesRoutes);
+app.use("/pricecake", pricesCakeRoutes);
+app.use("/pricecupcake", pricesCupcakesRoutes);
 
 mongoDB.connect
   .then((message) => {
