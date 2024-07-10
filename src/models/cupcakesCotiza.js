@@ -1,12 +1,8 @@
 const mongoose = require("mongoose");
 
-const pastelSchema = new mongoose.Schema(
+const cupcakesSchema = new mongoose.Schema(
   {
-    flavor: {
-      type: String,
-      required: true,
-    },
-    levels: {
+    flavorBizcocho: {
       type: String,
       required: true,
     },
@@ -15,10 +11,6 @@ const pastelSchema = new mongoose.Schema(
       required: true,
     },
     delivery: {
-      type: String,
-      required: true,
-    },
-    stuffedFlavor: {
       type: String,
       required: true,
     },
@@ -46,10 +38,6 @@ const pastelSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    fondant3d: {
-      type: String,
-      required: true,
-    },
     naturalFlowers: {
       type: String,
       required: true,
@@ -59,10 +47,6 @@ const pastelSchema = new mongoose.Schema(
       required: true,
     },
     sign: {
-      type: String,
-      required: true,
-    },
-    character: {
       type: String,
       required: true,
     },
@@ -92,6 +76,6 @@ const pastelSchema = new mongoose.Schema(
   }
 );
 
-const Prices = mongoose.model("pricespasteles", pastelSchema);
+const Pricescupcakes = mongoose.model("pricescupcakes", cupcakesSchema);
 
-module.exports = Prices;
+module.exports = Pricescupcakes;
