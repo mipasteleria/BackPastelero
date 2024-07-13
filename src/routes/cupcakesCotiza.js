@@ -35,4 +35,29 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+//Actualiza Cotizacion por ID Cupcake
+router.put("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newPrice = req.body;
+    const newPrices = await Prices.findByIdAndUpdate(id, newPrice, {
+      returnOriginal: false,
+    });
+    res.send({ message: "Price updated", data: newPrices });
+  } catch (error) {
+    res.status(400).send({ message: error });
+  }
+});
+
+//Borra Cotizacion por ID Cupcake
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Prices.findByIdAndDelete(id);
+    res.send({ message: "Price deleted" });
+  } catch (error) {
+    res.status(400).send({ message: error });
+  }
+});
+
 module.exports = router;

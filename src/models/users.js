@@ -7,12 +7,12 @@ const userSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      //match: [/^[A-Za-z]+$/, "Character not valid"],
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     lastname: {
       type: String,
       required: true,
-      //match: [/^[A-Za-z]+$/, "Character not valid"],
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     email: {
       type: String,
@@ -27,10 +27,12 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
+      match: [/^[0-9]+$/, "Phone number not valid"],
     },
     role: {
-      type: String,
-      isAdmin: true,
+      type: Boolean,
+      admin: false,
+      required: true,
     },
   },
   {
