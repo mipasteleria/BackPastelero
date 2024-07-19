@@ -8,83 +8,83 @@ const pastelSchema = new mongoose.Schema(
     },
     levels: {
       type: String,
-      required: true,
+      //required: true,
     },
     portions: {
       type: String,
-      required: true,
+      //required: true,
     },
     delivery: {
       type: String,
-      required: true,
+      //required: true,
     },
     stuffedFlavor: {
       type: String,
-      required: true,
+      //required: true,
     },
     devileryAdress: {
       type: String,
-      required: true,
+      //required: true,
     },
     devileryDate: {
       type: String,
-      required: true,
+      //required: true,
     },
     buttercream: {
       type: String,
-      required: true,
+      //required: true,
     },
     ganache: {
       type: String,
-      required: true,
+      //required: true,
     },
     fondant: {
       type: String,
-      required: true,
+      //required: true,
     },
     fondantDraw: {
       type: String,
-      required: true,
+      //required: true,
     },
     fondant3d: {
       type: String,
-      required: true,
+      //required: true,
     },
     naturalFlowers: {
       type: String,
-      required: true,
+      //required: true,
     },
     fondantFlowers: {
       type: String,
-      required: true,
+      //required: true,
     },
     sign: {
       type: String,
-      required: true,
+      //required: true,
     },
     character: {
       type: String,
-      required: true,
+      //required: true,
     },
     other: {
       type: String,
-      required: true,
+      //required: true,
     },
     budget: {
       type: String,
-      required: true,
+      ////required: true,
     },
     contactName: {
       type: String,
-      required: true,
+      //required: true,
     },
     contactPhone: {
       type: String,
-      required: true,
+      //required: true,
     },
     questionsOrComments: {
       type: String,
-      required: true,
+      //required: true,
     },
   },
   {
