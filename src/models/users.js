@@ -32,7 +32,6 @@ const userSchema = new mongoose.Schema(
     role: {
       type: Boolean,
       admin: false,
-      required: true,
     },
   },
   {
