@@ -27,11 +27,7 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
-      match: [/^[0-9]+$/, "Phone number not valid"],
-    },
-    role: {
-      type: Boolean,
-      admin: false,
+      //match: [/^[0-9]+$/, "Phone number not valid"],
     },
   },
   {
