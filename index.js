@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
-const port = "https://pasteleros-back.vercel.app/" || 3001;
+const port = process.env.PORT || 3001;
 const mongoDB = require("./src/database/db.js");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
