@@ -4,83 +4,87 @@ const snacksSchema = new mongoose.Schema(
   {
     portions: {
       type: String,
-      required: true,
+      //required: true,
     },
     delivery: {
       type: String,
-      required: true,
+      //required: true,
     },
     devileryAdress: {
       type: String,
-      required: true,
+      //required: true,
     },
     devileryDate: {
       type: String,
-      required: true,
+      //required: true,
     },
     pay: {
       type: String,
-      required: true,
+      //required: true,
     },
     brownie: {
       type: String,
-      required: true,
+      //required: true,
     },
     coockie: {
       type: String,
-      required: true,
+      //required: true,
     },
     alfajores: {
       type: String,
-      required: true,
+      //required: true,
     },
     macaroni: {
       type: String,
-      required: true,
+      //required: true,
     },
     donuts: {
       type: String,
-      required: true,
+      //required: true,
     },
     lollipops: {
       type: String,
-      required: true,
+      //required: true,
     },
     cupcakes: {
       type: String,
-      required: true,
+      //required: true,
     },
     bread: {
       type: String,
-      required: true,
+      //required: true,
     },
     tortaOrange: {
       type: String,
-      required: true,
+      //required: true,
     },
     americanCoockies: {
       type: String,
-      required: true,
+      //required: true,
     },
     tortaApple: {
       type: String,
-      required: true,
+      //required: true,
     },
     budget: {
       type: String,
-      required: true,
+      //required: true,
+      match: [/^[0-9]+$/, "character not valid"],
     },
     contactName: {
       type: String,
-      required: true,
+      //required: true,
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
-      required: true,
+      //required: true,
+      match: [/^[0-9]+$/, "character not valid"],
     },
     questionsOrComments: {
       type: String,
-      required: true,
+      //required: true,
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
   },
   {

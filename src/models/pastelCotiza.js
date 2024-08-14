@@ -4,7 +4,7 @@ const pastelSchema = new mongoose.Schema(
   {
     flavor: {
       type: String,
-      required: true,
+      //required: true,
     },
     levels: {
       type: String,
@@ -73,18 +73,22 @@ const pastelSchema = new mongoose.Schema(
     budget: {
       type: String,
       ////required: true,
+      match: [/^[0-9]+$/, "character not valid"],
     },
     contactName: {
       type: String,
       //required: true,
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
       //required: true,
+      match: [/^[0-9]+$/, "character not valid"],
     },
     questionsOrComments: {
       type: String,
       //required: true,
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
   },
   {
