@@ -23,9 +23,20 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/nombres", async (req, res) => {
+  try {
+    // Obtener solo los nombres de los documentos
+    const nombres = await Insumos.find({}, "name"); // Obtener solo el campo 'name'
+    res.status(200).send(nombres.map(insumo => insumo.name));
+  } catch (error) {
+    res.status(400).send({ message: error.message });
+  }
+});
+
 // Obtener un Insumo por ID (GET)
 router.get("/:id", async (req, res) => {
   try {
+
     const { id } = req.params;
     const insumo = await Insumos.findById(id);
     if (!insumo) {
