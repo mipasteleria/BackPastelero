@@ -1,18 +1,18 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
       required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
+      match: [/^[A-Za-zÀ-ÿ]+$/, "Character not valid"], // Permitir caracteres especiales
     },
     lastname: {
       type: String,
       required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
+      match: [/^[A-Za-zÀ-ÿ\s]+$/, "Character not valid"], // Permitir caracteres especiales
     },
     email: {
       type: String,
@@ -29,24 +29,41 @@ const userSchema = new mongoose.Schema(
       required: true,
       match: [/^[0-9]+$/, "Phone number not valid"],
     },
+    permissions: {
+      type: String,
+      required: true,
+      enum: ['Admin', 'Standard', 'End user'],
+    },
+    billing_name: {
+      type: String,
+    },
+    rfc: {
+      type: String,
+    },
+    address: {
+      type: String,
+    },
+    billing_email: {
+      type: String,
+    },
   },
   {
     timestamps: true,
     statics: {
-      encryptPassword: async (password) => {
+      encryptPassword: async function(password) {
         const salt = await bcrypt.genSalt(15);
         return await bcrypt.hash(password, salt);
       },
-      isValidPassword: async (password, hash) => {
+      isValidPassword: async function(password, hash) {
         return await bcrypt.compare(password, hash);
       },
-      createToken: async (payload) => {
-        return jwt.sign(payload, process.env.JWT_SIGN, { expiresIn: "1h" });
+      createToken: async function(payload) {
+        return jwt.sign(payload, process.env.JWT_SIGN, { expiresIn: '1h' });
       },
     },
   }
 );
 
-const User = mongoose.model("users", userSchema);
+const User = mongoose.model('User', userSchema);
 
 module.exports = User;
