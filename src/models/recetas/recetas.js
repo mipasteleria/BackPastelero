@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const ingredienteSchema = require("./ingrediente"); // Asegúrate de que la ruta al archivo sea correcta
+const Ingrediente = require("./ingrediente"); // Importar el modelo de Ingrediente
 
 const recetaSchema = new mongoose.Schema(
   {
@@ -11,7 +11,7 @@ const recetaSchema = new mongoose.Schema(
       type: String,
       required: [true, "La descripción es obligatoria"],
     },
-    ingredientes: [ingredienteSchema], // Array de ingredientes
+    ingredientes: [Ingrediente.schema], // Array de ingredientes usando el schema del modelo
     profit_margin: {
       type: Number,
       required: [true, "El margen de ganancia es obligatorio"],
