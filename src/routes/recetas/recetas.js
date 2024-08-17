@@ -6,8 +6,11 @@ const Receta = require('../../models/recetas/recetas'); // Verifica que el model
 router.post('/', async (req, res) => {
   try {
     const receta = req.body;
+    
+    // Verifica los datos recibidos
+    console.log("Datos recibidos:", receta);
 
-    // Aquí puedes agregar validaciones si es necesario
+    // Validaciones
     if (!receta.nombre_receta || !receta.descripcion || !Array.isArray(receta.ingredients) || receta.ingredients.length === 0) {
       return res.status(400).send({ message: 'Datos incompletos o inválidos' });
     }

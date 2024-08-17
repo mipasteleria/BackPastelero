@@ -2,16 +2,27 @@ const express = require('express');
 const router = express.Router();
 const Ingrediente = require('../../models/recetas/ingrediente'); // Verifica que la ruta al modelo sea correcta
 
-// Crear un nuevo ingrediente (POST)
 router.post('/', async (req, res) => {
   try {
     const ingrediente = req.body;
+
+    // Verificar y depurar datos recibidos
+    console.log('Datos recibidos:', ingrediente);
+
+    // Verifica que todos los campos requeridos estén presentes
+    if (!ingrediente.ingrediente || !ingrediente.cantidad || !ingrediente.precio || !ingrediente.unidad || !ingrediente.total) {
+      return res.status(400).send({ message: 'Todos los campos son requeridos' });
+    }
+
+    // Crear el nuevo ingrediente en la base de datos
     const newIngrediente = await Ingrediente.create(ingrediente);
     res.status(201).send({ message: 'Ingrediente creado', data: newIngrediente });
   } catch (error) {
+    console.error('Error al crear el ingrediente:', error); // Registrar el error
     res.status(400).send({ message: error.message });
   }
 });
+
 
 // Obtener todos los ingredientes (GET)
 router.get('/', async (req, res) => {
