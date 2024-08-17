@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/users");
+const { myToken } = require("../middlewares/myAdmin");
 
 //Registro
 router.post("/", async (req, res) => {
@@ -40,4 +41,5 @@ router.get("/list", async (req, res) => {
     res.status(400).send({ message: error });
   }
 });
+
 module.exports = router;

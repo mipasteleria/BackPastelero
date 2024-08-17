@@ -1,12 +1,10 @@
 const express = require("express");
-const router = express.Router();
 
 const myAdmin = (req, res, next) => {
-  const { user, role } = req.headers;
+  console.log("Hola");
+  next();
+};
 
-  if (user != req.params.id && role != true) {
-    res.status(401).send({ message: "User not authorized" });
-  } else {
-    next();
-  }
+module.exports = {
+  myAdmin,
 };
