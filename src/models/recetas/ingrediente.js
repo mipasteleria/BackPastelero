@@ -23,4 +23,8 @@ const ingredienteSchema = new mongoose.Schema({
   },
 });
 
-module.exports = ingredienteSchema;
+// Crear el modelo a partir del esquema
+const Ingrediente = mongoose.model("Ingrediente", ingredienteSchema);
+
+// Exportar el modelo
+module.exports = Ingrediente;
