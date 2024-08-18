@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/users");
+const checkRole = require("../middlewares/myAdmin");
 
 // Registro
 router.post("/", async (req, res) => {
@@ -12,8 +13,7 @@ router.post("/", async (req, res) => {
       !user.lastname ||
       !user.email ||
       !user.password ||
-      !user.phone ||
-      !user.permissions
+      !user.phone
     ) {
       return res
         .status(400)
@@ -28,12 +28,10 @@ router.post("/", async (req, res) => {
       .status(201)
       .send({ message: "User created successfully", data: newUser });
   } catch (error) {
-    res
-      .status(400)
-      .send({
-        message: error.message || "An error occurred while creating the user",
-        error,
-      });
+    res.status(400).send({
+      message: error.message || "An error occurred while creating the user",
+      error,
+    });
   }
 });
 
@@ -50,27 +48,23 @@ router.post("/login", async (req, res) => {
     const token = await User.createToken({ _id: user._id, name: user.name });
     res.status(200).send({ message: "Login Success", data: token });
   } catch (error) {
-    res
-      .status(400)
-      .send({
-        message: error.message || "An error occurred during login",
-        error,
-      });
+    res.status(400).send({
+      message: error.message || "An error occurred during login",
+      error,
+    });
   }
 });
 
 // Recuperar listado
-router.get("/list", async (req, res) => {
+router.get("/list", checkRole, async (req, res) => {
   try {
     const usersData = await User.find();
     res.send({ message: "All users", data: usersData });
   } catch (error) {
-    res
-      .status(400)
-      .send({
-        message: error.message || "An error occurred while retrieving users",
-        error,
-      });
+    res.status(400).send({
+      message: error.message || "An error occurred while retrieving users",
+      error,
+    });
   }
 });
 
