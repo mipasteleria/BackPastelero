@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Prices = require("../models/pastelCotiza");
+const checkRoleToken = require("../middlewares/myRoleToken");
 
 //Enviar Cotización Cake
 router.post("/", async (req, res) => {
@@ -15,7 +16,7 @@ router.post("/", async (req, res) => {
 });
 
 //Recuperar Datos Cotización Cake
-router.get("/", async (req, res) => {
+router.get("/", checkRoleToken, async (req, res) => {
   try {
     const pricesData = await Prices.find();
     res.send({ message: "All Prices Cake", data: pricesData });
@@ -25,7 +26,7 @@ router.get("/", async (req, res) => {
 });
 
 //Obtener Cotizaciones por ID Cake
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     const pricesid = await Prices.findById({ _id: id });
@@ -36,7 +37,7 @@ router.get("/:id", async (req, res) => {
 });
 
 //Actualiza Cotizacion por ID Cake
-router.put("/:id", async (req, res) => {
+router.put("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     const newPrice = req.body;
@@ -50,7 +51,7 @@ router.put("/:id", async (req, res) => {
 });
 
 //Borra Cotizacion por ID Cake
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     await Prices.findByIdAndDelete(id);

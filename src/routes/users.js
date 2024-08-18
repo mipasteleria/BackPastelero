@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const User = require("../models/users");
-const checkRole = require("../middlewares/myAdmin");
+const checkRoleToken = require("../middlewares/myRoleToken");
 
 // Registro
 router.post("/", async (req, res) => {
@@ -45,8 +45,12 @@ router.post("/login", async (req, res) => {
       return res.status(401).send({ message: "Invalid email or password" });
     }
 
-    const token = await User.createToken({ _id: user._id, name: user.name });
-    res.status(200).send({ message: "Login Success", data: token });
+    const token = await User.createToken({
+      _id: user._id,
+      name: user.name,
+      role: user.role,
+    });
+    res.status(200).send({ message: "Login Success", token: token });
   } catch (error) {
     res.status(400).send({
       message: error.message || "An error occurred during login",
@@ -56,7 +60,7 @@ router.post("/login", async (req, res) => {
 });
 
 // Recuperar listado
-router.get("/list", checkRole, async (req, res) => {
+router.get("/list", checkRoleToken("admin"), async (req, res) => {
   try {
     const usersData = await User.find();
     res.send({ message: "All users", data: usersData });
@@ -69,7 +73,7 @@ router.get("/list", checkRole, async (req, res) => {
 });
 
 // Ruta para obtener un usuario por ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -86,7 +90,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Ruta para actualizar un usuario
-router.put("/:id", async (req, res) => {
+router.put("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     const updatedUser = await User.findByIdAndUpdate(id, req.body, {
@@ -107,7 +111,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Ruta para eliminar un usuario
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", checkRoleToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
