@@ -1,10 +1,11 @@
-const express = require("express");
+const checkRole = (req, res, next) => {
+  const { role } = req.headers;
 
-const myAdmin = (req, res, next) => {
-  console.log("Hola");
-  next();
+  if (role !== "admin") {
+    res.status(401).json({ message: "User not authorized" });
+  } else {
+    next();
+  }
 };
 
-module.exports = {
-  myAdmin,
-};
+module.exports = checkRole;
