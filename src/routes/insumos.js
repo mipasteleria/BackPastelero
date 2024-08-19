@@ -1,9 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const Insumos = require("../models/insumos");
+const checkRoleToken = require("../middlewares/myRoleToken");
 
 // Enviar Insumo (POST)
-router.post("/", async (req, res) => {
+router.post("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const insumo = req.body;
     const newInsumo = await Insumos.create(insumo);
@@ -14,7 +15,7 @@ router.post("/", async (req, res) => {
 });
 
 // Obtener todos los Insumos (GET)
-router.get("/", async (req, res) => {
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const insumos = await Insumos.find(); // Obtener todos los documentos
     res.status(200).send(insumos);
@@ -23,8 +24,18 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/nombres", checkRoleToken("admin"), async (req, res) => {
+  try {
+    // Obtener solo los nombres de los documentos
+    const nombres = await Insumos.find({}, "name"); // Obtener solo el campo 'name'
+    res.status(200).send(nombres.map((insumo) => insumo.name));
+  } catch (error) {
+    res.status(400).send({ message: error.message });
+  }
+});
+
 // Obtener un Insumo por ID (GET)
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const insumo = await Insumos.findById(id);
@@ -38,10 +49,12 @@ router.get("/:id", async (req, res) => {
 });
 
 // Actualizar un Insumo (PUT)
-router.put("/:id", async (req, res) => {
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedInsumo = await Insumos.findByIdAndUpdate(id, req.body, { new: true });
+    const updatedInsumo = await Insumos.findByIdAndUpdate(id, req.body, {
+      new: true,
+    });
     if (!updatedInsumo) {
       return res.status(404).send({ message: "Insumo not found" });
     }
@@ -52,7 +65,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Eliminar un Insumo (DELETE)
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const deletedInsumo = await Insumos.findByIdAndDelete(id);
