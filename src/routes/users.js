@@ -73,7 +73,7 @@ router.get("/list", checkRoleToken("admin"), async (req, res) => {
 });
 
 // Ruta para obtener un usuario por ID
-router.get("/:id", checkRoleToken, async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const user = await User.findById(id);
@@ -90,7 +90,7 @@ router.get("/:id", checkRoleToken, async (req, res) => {
 });
 
 // Ruta para actualizar un usuario
-router.put("/:id", checkRoleToken, async (req, res) => {
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const updatedUser = await User.findByIdAndUpdate(id, req.body, {
@@ -111,7 +111,7 @@ router.put("/:id", checkRoleToken, async (req, res) => {
 });
 
 // Ruta para eliminar un usuario
-router.delete("/:id", checkRoleToken, async (req, res) => {
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) {
