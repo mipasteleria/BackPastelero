@@ -3,7 +3,7 @@ const router = express.Router();
 const Ingrediente = require("../../models/recetas/ingrediente"); // Verifica que la ruta al modelo sea correcta
 const checkRoleToken = require("../../middlewares/myRoleToken");
 
-router.post("/", checkRoleToken, async (req, res) => {
+router.post("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const ingrediente = req.body;
 
@@ -35,7 +35,7 @@ router.post("/", checkRoleToken, async (req, res) => {
 });
 
 // Obtener todos los ingredientes (GET)
-router.get("/", checkRoleToken, async (req, res) => {
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const ingredientes = await Ingrediente.find();
     res.status(200).send({ data: ingredientes });
@@ -45,7 +45,7 @@ router.get("/", checkRoleToken, async (req, res) => {
 });
 
 // Obtener un ingrediente por ID (GET)
-router.get("/:id", checkRoleToken, async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const ingrediente = await Ingrediente.findById(id);
@@ -59,7 +59,7 @@ router.get("/:id", checkRoleToken, async (req, res) => {
 });
 
 // Actualizar un ingrediente por ID (PUT)
-router.put("/:id", checkRoleToken, async (req, res) => {
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const ingrediente = req.body;
@@ -80,7 +80,7 @@ router.put("/:id", checkRoleToken, async (req, res) => {
 });
 
 // Eliminar un ingrediente por ID (DELETE)
-router.delete("/:id", checkRoleToken, async (req, res) => {
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const deletedIngrediente = await Ingrediente.findByIdAndDelete(id);
