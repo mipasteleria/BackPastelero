@@ -4,91 +4,90 @@ const pastelSchema = new mongoose.Schema(
   {
     flavor: {
       type: String,
-      //required: true,
+      required: true,
     },
     levels: {
       type: String,
-      //required: true,
+      required: true,
     },
     portions: {
       type: String,
-      //required: true,
+      required: true,
     },
     delivery: {
       type: String,
-      //required: true,
+      required: true,
     },
     stuffedFlavor: {
       type: String,
-      //required: true,
+      required: true,
     },
-    devileryAdress: {
+    deliveryAddress: {
       type: String,
-      //required: true,
+      required: true,
     },
-    devileryDate: {
-      type: String,
-      //required: true,
+    deliveryDate: {
+      type: Date, // Cambié el tipo a Date para manejar fechas correctamente
+      required: true,
     },
     buttercream: {
       type: String,
-      //required: true,
+      required: true,
     },
     ganache: {
       type: String,
-      //required: true,
+      required: true,
     },
     fondant: {
       type: String,
-      //required: true,
+      required: true,
     },
     fondantDraw: {
       type: String,
-      //required: true,
+      required: true,
     },
     fondant3d: {
       type: String,
-      //required: true,
+      required: true,
     },
     naturalFlowers: {
       type: String,
-      //required: true,
+      required: true,
     },
     fondantFlowers: {
       type: String,
-      //required: true,
+      required: true,
     },
     sign: {
       type: String,
-      //required: true,
+      required: true,
     },
     character: {
       type: String,
-      //required: true,
+      required: true,
     },
     other: {
       type: String,
-      //required: true,
+      required: true,
     },
     budget: {
       type: String,
-      ////required: true,
-      match: [/^[0-9]+$/, "character not valid"],
+      required: true,
+      match: [/^[0-9]+$/, "Budget should be a number"],
     },
     contactName: {
       type: String,
-      //required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
+      required: true,
+      match: [/^[A-Za-zÀ-ÿ\s]+$/, "Contact name should contain only letters and spaces"], // Actualizado
     },
     contactPhone: {
       type: String,
-      //required: true,
-      match: [/^[0-9]+$/, "character not valid"],
+      required: true,
+      match: [/^[0-9]+$/, "Contact phone should contain only numbers"],
     },
     questionsOrComments: {
       type: String,
-      //required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
+      required: true,
     },
   },
   {
