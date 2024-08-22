@@ -6,7 +6,19 @@ const cupcakesSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
+    stuffedFlavor: {
+      type: String,
+      //required: true,
+    },
+    cover: {
+      type: String,
+      //required: true,
+    },
     portions: {
+      type: String,
+      //required: true,
+    },
+    fondantCover: {
       type: String,
       //required: true,
     },
@@ -14,23 +26,11 @@ const cupcakesSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
-    devileryAdress: {
+    deliveryAdress: {
       type: String,
       //required: true,
     },
-    devileryDate: {
-      type: String,
-      //required: true,
-    },
-    buttercream: {
-      type: String,
-      //required: true,
-    },
-    ganache: {
-      type: String,
-      //required: true,
-    },
-    fondant: {
+    deliveryDate: {
       type: String,
       //required: true,
     },
@@ -38,11 +38,11 @@ const cupcakesSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
-    naturalFlowers: {
+    buttercreamDraw: {
       type: String,
       //required: true,
     },
-    fondantFlowers: {
+    naturalFlowers: {
       type: String,
       //required: true,
     },
@@ -50,7 +50,19 @@ const cupcakesSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
+    eatablePrint: {
+      type: String,
+      //required: true,
+    },
+    sprinkles: {
+      type: String,
+      //required: true,
+    },
     other: {
+      type: String,
+      //required: true,
+    },
+    image: {
       type: String,
       //required: true,
     },
