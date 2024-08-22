@@ -2,7 +2,11 @@ const mongoose = require("mongoose");
 
 const snacksSchema = new mongoose.Schema(
   {
-    portions: {
+    people: {
+      type: String,
+      //required: true,
+    },
+    portionsPerPerson: {
       type: String,
       //required: true,
     },
@@ -10,11 +14,11 @@ const snacksSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
-    devileryAdress: {
+    deliveryAdress: {
       type: String,
       //required: true,
     },
-    devileryDate: {
+    deliveryDate: {
       type: String,
       //required: true,
     },
@@ -54,7 +58,7 @@ const snacksSchema = new mongoose.Schema(
       type: String,
       //required: true,
     },
-    tortaOrange: {
+    tortaFruts: {
       type: String,
       //required: true,
     },
@@ -65,6 +69,12 @@ const snacksSchema = new mongoose.Schema(
     tortaApple: {
       type: String,
       //required: true,
+    },
+    other: {
+      type: String,
+    },
+    image: {
+      type: String,
     },
     budget: {
       type: String,
