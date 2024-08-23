@@ -16,62 +16,63 @@ const pastelSchema = new mongoose.Schema(
     },
     delivery: {
       type: String,
-      //required: true,
     },
     stuffedFlavor: {
       type: String,
-      //required: true,
     },
-    devileryAdress: {
+    cover: {
       type: String,
-      //required: true,
     },
-    devileryDate: {
+    deliveryAdress: {
       type: String,
-      //required: true,
+    },
+    fondantCover: {
+      type: String,
+    },
+    deliveryDate: {
+      type: String,
     },
     buttercream: {
       type: String,
-      //required: true,
     },
     ganache: {
       type: String,
-      //required: true,
     },
     fondant: {
       type: String,
-      //required: true,
     },
     fondantDraw: {
       type: String,
-      //required: true,
     },
-    fondant3d: {
+    buttercreamDraw: {
       type: String,
-      //required: true,
+    },
+    sugarcharacter3d: {
+      type: String,
     },
     naturalFlowers: {
       type: String,
-      //required: true,
     },
     fondantFlowers: {
       type: String,
-      //required: true,
     },
     sign: {
       type: String,
-      //required: true,
+    },
+    eatablePrint: {
+      type: String,
     },
     character: {
       type: String,
-      //required: true,
     },
     other: {
       type: String,
-      //required: true,
+    },
+    image: {
+      type: String,
     },
     budget: {
-      type: String,
+      type: Number,
       ////required: true,
       match: [/^[0-9]+$/, "character not valid"],
     },

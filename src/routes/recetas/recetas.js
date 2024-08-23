@@ -4,7 +4,7 @@ const Receta = require("../../models/recetas/recetas"); // Verifica que el model
 const checkRoleToken = require("../../middlewares/myRoleToken");
 
 // Crear una nueva receta (POST)
-router.post("/", checkRoleToken("admin"), async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const receta = req.body;
 
@@ -31,7 +31,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
 });
 
 // Obtener todas las recetas (GET)
-router.get("/", checkRoleToken("admin"), async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const recetas = await Receta.find();
     res.status(200).send({ data: recetas });
@@ -42,7 +42,7 @@ router.get("/", checkRoleToken("admin"), async (req, res) => {
 });
 
 // Obtener una receta por ID (GET)
-router.get("/:id", checkRoleToken("admin"), async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const receta = await Receta.findById(id);
@@ -57,7 +57,7 @@ router.get("/:id", checkRoleToken("admin"), async (req, res) => {
 });
 
 // Actualizar una receta por ID (PUT)
-router.put("/:id", checkRoleToken("admin"), async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const receta = req.body;
@@ -77,7 +77,7 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
 });
 
 // Eliminar una receta por ID (DELETE)
-router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const deletedReceta = await Receta.findByIdAndDelete(id);

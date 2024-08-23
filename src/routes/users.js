@@ -48,6 +48,7 @@ router.post("/login", async (req, res) => {
     const token = await User.createToken({
       _id: user._id,
       name: user.name,
+      email: user.email,
       role: user.role,
     });
     res.status(200).send({ message: "Login Success", token: token });
