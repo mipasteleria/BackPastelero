@@ -33,7 +33,10 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
-      match: [/^[0-9]+$/, "Phone number not valid"],
+      match: [
+        /^\d{3}-\d{3}-\d{4}$/,
+        "Phone number not valid. Must be in the format 000-000-0000",
+      ],
     },
     role: {
       type: String,
