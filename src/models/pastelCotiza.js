@@ -4,15 +4,15 @@ const pastelSchema = new mongoose.Schema(
   {
     flavor: {
       type: String,
-      //required: true,
+      required: true,
     },
     levels: {
       type: String,
-      //required: true,
+      required: true,
     },
     portions: {
       type: String,
-      //required: true,
+      required: true,
     },
     delivery: {
       type: String,
@@ -73,23 +73,23 @@ const pastelSchema = new mongoose.Schema(
     },
     budget: {
       type: Number,
-      ////required: true,
       match: [/^[0-9]+$/, "character not valid"],
     },
     contactName: {
       type: String,
-      //required: true,
+      required: true,
       match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
-      //required: true,
-      match: [/^[0-9]+$/, "character not valid"],
+      required: true,
+      match: [
+        /^\d{3}-\d{3}-\d{4}$/,
+        "Invalid phone number format. Use 000-000-0000",
+      ],
     },
     questionsOrComments: {
       type: String,
-      //required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
   },
   {
