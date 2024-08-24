@@ -4,86 +4,75 @@ const cupcakesSchema = new mongoose.Schema(
   {
     flavorBizcocho: {
       type: String,
-      //required: true,
+      required: true,
     },
     stuffedFlavor: {
       type: String,
-      //required: true,
+      required: true,
     },
     cover: {
       type: String,
-      //required: true,
+      required: true,
     },
     portions: {
       type: String,
-      //required: true,
+      required: true,
     },
     fondantCover: {
       type: String,
-      //required: true,
     },
     delivery: {
       type: String,
-      //required: true,
     },
     deliveryAdress: {
       type: String,
-      //required: true,
     },
     deliveryDate: {
       type: String,
-      //required: true,
     },
     fondantDraw: {
       type: String,
-      //required: true,
     },
     buttercreamDraw: {
       type: String,
-      //required: true,
     },
     naturalFlowers: {
       type: String,
-      //required: true,
     },
     sign: {
       type: String,
-      //required: true,
     },
     eatablePrint: {
       type: String,
-      //required: true,
     },
     sprinkles: {
       type: String,
-      //required: true,
     },
     other: {
       type: String,
-      //required: true,
     },
     image: {
       type: String,
-      //required: true,
     },
     budget: {
       type: String,
-      //required: true,
       match: [/^[0-9]+$/, "character not valid"],
     },
     contactName: {
       type: String,
-      //required: true,
+      required: true,
       match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
-      //required: true,
-      match: [/^[0-9]+$/, "Character not valid"],
+      required: true,
+      match: [
+        /^\d{3}-\d{3}-\d{4}$/,
+        "Invalid phone number format. Use 000-000-0000",
+      ],
     },
     questionsOrComments: {
       type: String,
-      //required: true,
     },
   },
   {
