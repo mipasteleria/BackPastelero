@@ -42,6 +42,7 @@ const recetaSchema = new mongoose.Schema(
     total_cost: {
       type: Number,
       required: [true, "El costo total es obligatorio"],
+      match: [/^\d+(\.\d+)?$/, "Gastos fijos en horas no válidos"], // Permite decimales
     },
   },
   {
