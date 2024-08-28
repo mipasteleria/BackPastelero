@@ -37,19 +37,28 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-//Actualiza Cotizacion por ID Cake
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const newPrice = req.body;
-    const newPrices = await Prices.findByIdAndUpdate(id, newPrice, {
-      returnOriginal: false,
+
+    console.log('Received data for update:', newPrice);
+
+    const updatedPrice = await Prices.findByIdAndUpdate(id, newPrice, {
+      new: true,
+      runValidators: true,
     });
-    res.send({ message: "Price updated", data: newPrices });
+
+    if (!updatedPrice) {
+      return res.status(404).send({ message: "Price not found" });
+    }
+
+    res.send({ message: "Price updated", data: updatedPrice });
   } catch (error) {
-    res.status(400).send({ message: error });
+    res.status(400).send({ message: error.message });
   }
 });
+
 
 //Borra Cotizacion por ID Cake
 router.delete("/:id", async (req, res) => {
