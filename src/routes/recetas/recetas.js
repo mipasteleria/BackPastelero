@@ -15,8 +15,8 @@ router.post("/", async (req, res) => {
     if (
       !receta.nombre_receta ||
       !receta.descripcion ||
-      !Array.isArray(receta.ingredients) ||
-      receta.ingredients.length === 0
+      !Array.isArray(receta.ingredientes) ||
+      receta.ingredientes.length === 0
     ) {
       return res.status(400).send({ message: "Datos incompletos o inválidos" });
     }
