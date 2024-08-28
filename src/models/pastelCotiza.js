@@ -91,6 +91,15 @@ const pastelSchema = new mongoose.Schema(
     questionsOrComments: {
       type: String,
     },
+    precio: {
+      type: Number,
+      },
+    anticipo: {
+      type: Number,
+      },
+    status: {
+      type: Boolean,
+      }, 
   },
   {
     timestamps: true,
