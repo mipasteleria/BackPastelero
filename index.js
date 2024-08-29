@@ -12,6 +12,9 @@ const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 
+
+
+
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
@@ -49,3 +52,11 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+app.set('view engine', 'ejs')
+
+app.get('/a',(req,res) => {
+  res.render('index.ejs')
+})
+
+
