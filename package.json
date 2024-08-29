@@ -12,8 +12,12 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.609.0",
+<<<<<<< HEAD
     "@stripe/react-stripe-js": "^2.8.0",
     "@stripe/stripe-js": "^4.4.0",
+=======
+    "@google-cloud/storage": "^7.12.1",
+>>>>>>> a1e794f6e9d304a7913d46aa2bdcce7439fc6f19
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
