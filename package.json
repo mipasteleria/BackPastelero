@@ -12,11 +12,15 @@
   "license": "ISC",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.609.0",
+    "@stripe/react-stripe-js": "^2.8.0",
+    "@stripe/stripe-js": "^4.4.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.8.0",
     "mongoos": "^0.0.1-security",
     "mongoose": "^8.4.4",
     "stripe": "^16.8.0"
