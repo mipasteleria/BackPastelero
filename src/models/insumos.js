@@ -20,7 +20,7 @@ const insumosSchema = new mongoose.Schema(
     unit: {
       type: String,
       required: true,
-      match: [/^[0-9]+$/, "character not valid"],
+      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
   },
   {
