@@ -96,7 +96,7 @@ const snacksSchema = new mongoose.Schema(
       default: "No aprobado",
       },
     userId: {
-      type: Number,
+      type: String,
       },
   },
   {

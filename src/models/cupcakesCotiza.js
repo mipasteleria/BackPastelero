@@ -87,6 +87,9 @@ const cupcakesSchema = new mongoose.Schema(
       type: String,
       default: "No aprobado",
     },
+    userId: {
+      type: String,
+      },
   },
   {
     timestamps: true,
