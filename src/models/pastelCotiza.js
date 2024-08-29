@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const pastelSchema = new mongoose.Schema(
   {
+    priceType: {
+      type: String,
+      default: "Pastel",
+    },
     flavor: {
       type: String,
       required: true,
@@ -78,7 +82,6 @@ const pastelSchema = new mongoose.Schema(
     contactName: {
       type: String,
       required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
@@ -93,13 +96,14 @@ const pastelSchema = new mongoose.Schema(
     },
     precio: {
       type: Number,
-      },
+    },
     anticipo: {
       type: Number,
-      },
+    },
     status: {
-      type: Boolean,
-      }, 
+      type: String,
+      default: "No aprobado",
+    },
   },
   {
     timestamps: true,
