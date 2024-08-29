@@ -1,9 +1,11 @@
-const stripe = require('stripe')('sk_test_51PpLMA05NkS1u2DAL89pnKJxgtDJpGlmwUaUSqST9hiLtVtUv0wDVTHKVuZOpcvKCg813LZlKO7oXQMmjir8Bzki00Ue2ALaVY');
+// This is your test secret API key.
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const express = require('express');
 const app = express();
 app.use(express.static('public'));
 
-const YOUR_DOMAIN = 'http://localhost:3000;'
+const YOUR_DOMAIN = require('stripe')(process.env.YOUR_DOMAIN);
+
 
 app.post('/create-checkout-session', async (req, res) => {
   const session = await stripe.checkout.sessions.create({
@@ -31,4 +33,4 @@ app.get('/session-status', async (req, res) => {
   });
 });
 
-app.listen(4242, () => console.log('Running on port 4242'));
+app.listen(3000, () => console.log('Running on port 3000'));
