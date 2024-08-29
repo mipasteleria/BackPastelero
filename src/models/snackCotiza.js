@@ -92,9 +92,12 @@ const snacksSchema = new mongoose.Schema(
       type: Number,
     },
     status: {
-      type: String,
+      type: Boolean,
       default: "No aprobado",
-    },
+      },
+    userId: {
+      type: String,
+      },
   },
   {
     timestamps: true,

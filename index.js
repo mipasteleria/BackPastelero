@@ -14,8 +14,6 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 
 
-
-
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
@@ -54,15 +52,6 @@ app.use((err, req, res, next) => {
   res.status(500).send({ message: "Something broke!" });
 });
 
-<<<<<<< HEAD
-app.set('view engine', 'ejs')
-
-app.get('/a',(req,res) => {
-  res.render('index.ejs')
-})
-
-
-=======
 async function uploadFile(bucketName, file, fileOutputName) {
   try {
     const projectID = process.env.PROJECT_ID;
@@ -87,4 +76,3 @@ async function uploadFile(bucketName, file, fileOutputName) {
   );
   console.log(ret);
 })();
->>>>>>> a1e794f6e9d304a7913d46aa2bdcce7439fc6f19
