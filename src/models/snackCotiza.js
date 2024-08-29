@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const snacksSchema = new mongoose.Schema(
   {
+    priceType: {
+      type: String,
+      default: "Snack",
+    },
     people: {
       type: String,
       required: true,
@@ -69,7 +73,6 @@ const snacksSchema = new mongoose.Schema(
     contactName: {
       type: String,
       required: true,
-      match: [/^[A-Za-z]+$/, "Character not valid"],
     },
     contactPhone: {
       type: String,
@@ -84,13 +87,14 @@ const snacksSchema = new mongoose.Schema(
     },
     precio: {
       type: Number,
-      },
+    },
     anticipo: {
       type: Number,
-      },
+    },
     status: {
-      type: Boolean,
-      }, 
+      type: String,
+      default: "No aprobado",
+    },
   },
   {
     timestamps: true,
