@@ -1,5 +1,4 @@
 require("dotenv").config();
-const { Storage } = require("@google-cloud/storage");
 const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
@@ -12,7 +11,6 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
-
 
 const cors = require("cors");
 const corsOptions = {
@@ -51,28 +49,3 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
-
-async function uploadFile(bucketName, file, fileOutputName) {
-  try {
-    const projectID = process.env.PROJECT_ID;
-    const keyFileName = process.env.KEYFILENAME;
-    const storage = new Storage({ projectID, keyFileName });
-
-    const bucket = storage.bucket(bucketName);
-
-    const ret = await bucket.upload(file, {
-      destination: fileOutputName,
-    });
-    return ret;
-  } catch (error) {
-    console.error("Error:", error);
-  }
-}
-(async () => {
-  const ret = await uploadFile(
-    process.env.BUCKET_NAME,
-    "test.txt",
-    "Pastelerosdesdefunciob.txt"
-  );
-  console.log(ret);
-})();
