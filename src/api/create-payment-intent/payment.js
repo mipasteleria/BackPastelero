@@ -3,7 +3,7 @@ const express = require('express');
 const app = express();
 app.use(express.static('public'));
 
-const YOUR_DOMAIN = 'http://localhost:3000;'
+const YOUR_DOMAIN = 'http://localhost:3001;'
 
 app.post('/create-checkout-session', async (req, res) => {
   const session = await stripe.checkout.sessions.create({
@@ -31,4 +31,4 @@ app.get('/session-status', async (req, res) => {
   });
 });
 
-app.listen(4242, () => console.log('Running on port 4242'));
+app.listen(3000, () => console.log('Running on port 3000'));
