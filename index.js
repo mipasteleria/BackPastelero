@@ -1,4 +1,5 @@
 require("dotenv").config();
+const {Storage}= require ('@google-cloud/storage');
 const express = require("express");
 const mongoose = require("mongoose");
 const app = express();
@@ -49,3 +50,30 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+
+const keyFilename = process.env.KEYFILENAME
+const projectID = process.env.PROJECT_ID
+
+const storage = new Storage({ projectID, keyFilename });
+
+async function uploadFile(bucketName, file, fileOutputName) {
+  try {
+    const bucket = storage.bucket(bucketName);
+
+    const ret = await bucket.upload(file, {
+      destination: fileOutputName,
+    });
+    return ret;
+  } catch (error) {
+    console.error("Error:", error);
+  }
+}
+(async () => {
+  const ret = await uploadFile(
+    process.env.BUCKET_NAME,
+    "test.txt",
+    "IMG_1318.jpg",
+  );
+  console.log(ret);
+})();
