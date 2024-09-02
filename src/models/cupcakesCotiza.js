@@ -55,9 +55,6 @@ const cupcakesSchema = new mongoose.Schema(
     other: {
       type: String,
     },
-    image: {
-      type: String,
-    },
     budget: {
       type: String,
       match: [/^[0-9]+$/, "character not valid"],
@@ -85,11 +82,11 @@ const cupcakesSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      default: "No aprobado",
+      default: "Pendiente",
     },
     userId: {
       type: String,
-      },
+    },
   },
   {
     timestamps: true,
