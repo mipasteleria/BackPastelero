@@ -14,7 +14,7 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
-
+const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
@@ -32,6 +32,8 @@ app.use("/pricesnack", pricesSnackRoutes);
 app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
+
+app.use("/checkout",createCheckoutSession);
 
 app.get("/", (req, res) => {
   res.send({ title: "Backend de Pasteleros" });
