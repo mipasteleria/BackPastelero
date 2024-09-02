@@ -12,7 +12,7 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
-
+const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
@@ -30,6 +30,8 @@ app.use("/pricesnack", pricesSnackRoutes);
 app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
+
+app.use("/checkout",createCheckoutSession);
 
 app.get("/", (req, res) => {
   res.send({ title: "Backend de Pasteleros" });
@@ -52,6 +54,8 @@ app.use((err, req, res, next) => {
 });
 
 
+
+// GOOGLE BUCKET
 const keyFilename = process.env.KEYFILENAME
 const projectID = process.env.PROJECT_ID
 
@@ -73,7 +77,15 @@ async function uploadFile(bucketName, file, fileOutputName) {
   const ret = await uploadFile(
     process.env.BUCKET_NAME,
     "test.txt",
-    "IMG_1318.jpg",
   );
   console.log(ret);
+
 })();
+
+// STRIPE
+app.set('view engine','ejs')
+
+app.get('/',(req, res) =>{
+  res.redirect(process.env.FRONT_DOMAIN + req.originalUrl);
+})
+
