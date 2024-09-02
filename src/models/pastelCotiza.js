@@ -72,9 +72,6 @@ const pastelSchema = new mongoose.Schema(
     other: {
       type: String,
     },
-    image: {
-      type: String,
-    },
     budget: {
       type: Number,
       match: [/^[0-9]+$/, "character not valid"],
@@ -102,11 +99,11 @@ const pastelSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      default: "No aprobado",
+      default: "Pendiente",
     },
     userId: {
       type: String,
-      },
+    },
   },
   {
     timestamps: true,
