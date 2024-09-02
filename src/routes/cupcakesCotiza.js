@@ -5,6 +5,7 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 
 //Enviar Cotización Cupcake
 router.post("/", async (req, res) => {
+  console.log("entra al backend");
   try {
     let price = req.body;
     const newPrice = await Prices.create(price);
