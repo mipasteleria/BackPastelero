@@ -33,7 +33,7 @@ app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 
-app.use("/checkout",createCheckoutSession);
+app.use("/checkout", createCheckoutSession);
 
 app.get("/", (req, res) => {
   res.send({ title: "Backend de Pasteleros" });
@@ -97,6 +97,7 @@ app.post("/upload", upload.array("files"), async (req, res) => {
 
 //ver imagen
 app.get("/image-url/:filename", async (req, res) => {
+  console.log("entro al backend imagen");
   try {
     const bucketName = process.env.BUCKET_NAME;
     const fileName = req.params.filename;
@@ -107,7 +108,7 @@ app.get("/image-url/:filename", async (req, res) => {
     const [url] = await file.getSignedUrl({
       version: "v4",
       action: "read",
-      expires: Date.now() + 60 * 60 * 1000,
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
     });
 
     res.status(200).json({ url });
