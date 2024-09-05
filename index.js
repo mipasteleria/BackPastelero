@@ -17,14 +17,13 @@ const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://front-pastelero-lovat.vercel.app'],
+  origin: ['http://localhost:3000', 'https://front-pastelero-theta.vercel.app/'],
   credentials: true,
   optionSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
-
 app.use("/users", usersRoutes);
 app.use("/pricecake", pricesCakeRoutes);
 app.use("/pricecupcake", pricesCupcakesRoutes);
@@ -36,7 +35,65 @@ app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 
 app.get("/", (req, res) => {
-  res.send({ title: "Backend de Pasteleros" });
+  res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Estás en Línea</title>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f0f4f8;
+                    font-family: Arial, sans-serif;
+                    text-align: center;
+                }
+                .container {
+                    background-color: #ffffff;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                    padding: 20px;
+                    max-width: 400px;
+                    width: 100%;
+                }
+                h1 {
+                    color: #333333;
+                    margin-bottom: 20px;
+                }
+                p {
+                    color: #555555;
+                    font-size: 1.1em;
+                }
+                .button {
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 10px 20px;
+                    background-color: #007bff;
+                    color: #ffffff;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    font-size: 1em;
+                    transition: background-color 0.3s ease;
+                }
+                .button:hover {
+                    background-color: #0056b3;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>¡Estás en Línea!</h1>
+                <p>Tu backend está funcionando correctamente. Si ves este mensaje, significa que todo está configurado bien.</p>
+                <a href="/" class="button">Volver al Inicio</a>
+            </div>
+        </body>
+        </html>
+    `);
 });
 
 const keyFilename = process.env.KEYFILENAME;
