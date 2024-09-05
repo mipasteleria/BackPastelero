@@ -1,7 +1,6 @@
 const express = require("express");
 require("dotenv").config();
 const { Storage } = require("@google-cloud/storage");
-const path = require("path");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const app = express();
@@ -16,14 +15,16 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
+
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://front-pastelero-theta.vercel.app/'],
+  origin: "*",
   credentials: true,
   optionSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
+
 app.use("/users", usersRoutes);
 app.use("/pricecake", pricesCakeRoutes);
 app.use("/pricecupcake", pricesCupcakesRoutes);
@@ -31,7 +32,6 @@ app.use("/pricesnack", pricesSnackRoutes);
 app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
-
 app.use("/checkout", createCheckoutSession);
 
 app.get("/", (req, res) => {
@@ -96,76 +96,69 @@ app.get("/", (req, res) => {
     `);
 });
 
-const keyFilename = process.env.KEYFILENAME;
-const projectID = process.env.PROJECT_ID;
-const upload = multer({ dest: "uploads/" });
-const storage = new Storage({ projectID, keyFilename });
-
-// Configuración de multer para guardar archivos temporalmente
-const diskStorage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // Carpeta donde se guardarán los archivos temporalmente
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname); // Nombre del archivo
-  },
+const storage = new Storage({
+  projectId: process.env.PROJECT_ID,
+  keyFilename: process.env.KEYFILENAME,
 });
 
-const uploadMulter = multer({ diskStorage: diskStorage });
+const bucketName = process.env.BUCKET_NAME;
 
-async function uploadFile(bucketName, filePath, fileOutputName) {
+// Configuración de multer para usar Google Cloud Storage directamente
+const upload = multer({
+  storage: multer.memoryStorage(), // Usar memoria para multer
+});
+
+async function uploadFileToGCS(file, bucketName) {
   try {
     const bucket = storage.bucket(bucketName);
-    const file = bucket.file(fileOutputName);
-
-    await bucket.upload(filePath, {
-      destination: file,
+    const blob = bucket.file(file.originalname);
+    const blobStream = blob.createWriteStream({
+      resumable: false,
+      gzip: true,
+      metadata: {
+        contentType: file.mimetype,
+      },
     });
 
-    return {
-      message: "File uploaded successfully",
-      fileUrl: `https://storage.googleapis.com/${bucketName}/${fileOutputName}`,
-    };
+    return new Promise((resolve, reject) => {
+      blobStream.on('error', (err) => reject(err));
+      blobStream.on('finish', () => {
+        const publicUrl = `https://storage.googleapis.com/${bucketName}/${file.originalname}`;
+        resolve({ message: "File uploaded successfully", fileUrl: publicUrl });
+      });
+      blobStream.end(file.buffer);
+    });
   } catch (error) {
     console.error("Error uploading file:", error);
     throw error;
   }
 }
 
-//subir imagen
-app.post("/upload", upload.array("files"), async (req, res) => {
+// Subir imagen
+app.post('/upload', upload.array('files'), async (req, res) => {
   try {
-    const bucketName = process.env.BUCKET_NAME;
+    const uploadPromises = req.files.map(file =>
+      uploadFileToGCS(file, bucketName)
+    );
 
-    // Procesar cada archivo cargado
-    const uploadPromises = req.files.map((file) => {
-      const filePath = file.path;
-      const fileOutputName = file.originalname;
-      return uploadFile(bucketName, filePath, fileOutputName);
-    });
-
-    await Promise.all(uploadPromises);
-
-    res.status(200).json({ message: "Files uploaded successfully" });
+    const results = await Promise.all(uploadPromises);
+    res.status(200).json(results);
   } catch (error) {
     res.status(500).json({ error: "Error uploading files" });
   }
 });
 
-//ver imagen
+// Ver imagen
 app.get("/image-url/:filename", async (req, res) => {
-  console.log("entro al backend imagen");
   try {
-    const bucketName = process.env.BUCKET_NAME;
     const fileName = req.params.filename;
-
     const bucket = storage.bucket(bucketName);
     const file = bucket.file(fileName);
 
     const [url] = await file.getSignedUrl({
       version: "v4",
       action: "read",
-      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+      expires: Date.now() + 60 * 60 * 1000, // 1 hora
     });
 
     res.status(200).json({ url });
