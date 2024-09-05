@@ -17,7 +17,7 @@ const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://tu-dominio.com'],
+  origin: ['http://localhost:3000', 'https://front-pastelero-lovat.vercel.app'],
   credentials: true,
   optionSuccessStatus: 200,
 };
