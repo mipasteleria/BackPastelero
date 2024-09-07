@@ -13,6 +13,7 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
+const costsRoutes = require("./src/routes/costs.js")
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const cors = require("cors");
 
@@ -24,6 +25,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use("/users", usersRoutes);
 app.use("/pricecake", pricesCakeRoutes);
@@ -33,6 +35,7 @@ app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
+app.use("/costs", costsRoutes)
 
 app.get("/", (req, res) => {
   res.send(`
