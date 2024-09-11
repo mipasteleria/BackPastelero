@@ -15,6 +15,8 @@ const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const punycode = require("punycode");
+
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
