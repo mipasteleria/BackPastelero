@@ -29,7 +29,7 @@ router.post('/create-checkout-session', async (req, res) => {
           price_data: {
             currency: 'mxn',
             product_data: {
-              name: "test",
+              name: "Pastel",
               
             },
             unit_amount: (amount *100), // Aquí utilizas `unit_amount` en lugar de `amount`
