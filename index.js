@@ -15,6 +15,7 @@ const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
 const cors = require("cors");
 const corsOptions = {
   origin: "*",
@@ -34,7 +35,7 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 
 app.use("/checkout", createCheckoutSession);
-
+app.use("/send-confirmation-email",sendConfirmationEmail )
 app.get("/", (req, res) => {
   res.send({ title: "Backend de Pasteleros" });
 });

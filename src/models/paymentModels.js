@@ -24,11 +24,17 @@ const PaymentData = new mongoose.Schema(
     },
     name:{
       type:String,
+    },
+    paymentOption: {
+      type:String,
     }
   },
   {
     timestamps: true,
-  }
+  },
+  
+  
+
 );
 
 const Payment = mongoose.model("PaymentData", PaymentData);
