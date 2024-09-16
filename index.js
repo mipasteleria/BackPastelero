@@ -3,6 +3,8 @@ require("dotenv").config();
 const { Storage } = require("@google-cloud/storage");
 const multer = require("multer");
 const mongoose = require("mongoose");
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const app = express();
 const port = process.env.PORT || 3001;
 const mongoDB = require("./src/database/db.js");
@@ -13,7 +15,7 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
-const costsRoutes = require("./src/routes/costs.js")
+const costsRoutes = require("./src/routes/costs.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const punycode = require("punycode");
 
@@ -101,6 +103,110 @@ app.get("/", (req, res) => {
     `);
 });
 
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Permite todas las solicitudes de origen
+    methods: ["GET", "POST"]
+  }
+});
+
+const NotificacionSchema = new mongoose.Schema({
+  mensaje: String,
+  nombreUsuario: String,
+  userId: String,
+  fecha: { type: Date, default: Date.now },
+  leida: { type: Boolean, default: false },
+});
+
+const Notificacion = mongoose.model('Notificacion', NotificacionSchema);
+
+// Manejar conexiones de Socket.IO
+io.on('connection', (socket) => {
+  console.log('Un usuario se ha conectado');
+
+  // Registrar usuario con su ID de usuario cuando se conecte
+  socket.on('registrarUsuario', (userId) => {
+    socket.join(userId); // Unirse a una "sala" específica para este usuario
+    console.log(`Usuario registrado en la sala: ${userId}`);
+  });
+
+  socket.on('solicitarCotizacion', async (data) => {
+    console.log('Nueva solicitud de cotización recibida:', data);
+
+    const nuevaNotificacion = new Notificacion({
+      mensaje: `Nueva solicitud de ${data.mensaje} recibida de ${data.nombreUsuario}.`,
+      nombreUsuario: data.nombreUsuario,
+    });
+
+    await nuevaNotificacion.save();
+  });
+
+  socket.on('aprobarCotizacion', async (data) => {
+    console.log('Cotización aprobada:', data);
+
+    const nuevaNotificacion = new Notificacion({
+      mensaje: `${data.nombreUsuario} Tu cotización de ${data.priceType} ha sido aprobada.`,
+      nombreUsuario: data.nombreUsuario,
+      userId: data.userId, // Usuario que recibirá la notificación
+    });
+
+    await nuevaNotificacion.save();
+    io.to(data.userId).emit('nuevaNotificacion', nuevaNotificacion); // Enviar notificación al usuario específico
+  });
+
+  socket.on('pagoRealizado', async (data) => {
+    console.log('Pago Realizado:', data);
+
+    const nuevaNotificacion = new Notificacion({
+      mensaje: `Compra completada por ${data.customer_email}`,
+      nombreUsuario: data.nombreUsuario,
+      userId: data.userId, // Usuario que recibirá la notificación
+    });
+
+    await nuevaNotificacion.save();
+    io.to(data.userId).emit('nuevaNotificacion', nuevaNotificacion); // Enviar notificación al usuario específico
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Un usuario se ha desconectado');
+  });
+});
+
+
+app.get('/notificaciones', async (req, res) => {
+  try {
+    // Obtener todas las notificaciones de la base de datos
+    const notificaciones = await Notificacion.find();
+    res.status(200).json(notificaciones);
+  } catch (error) {
+    console.error('Error al obtener las notificaciones:', error);
+    res.status(500).json({ error: 'Error al obtener las notificaciones' });
+  }
+});
+
+app.delete('/notificaciones/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Notificacion.findByIdAndDelete(id);
+    res.status(200).json({ message: 'Notificación eliminada con éxito' });
+  } catch (error) {
+    console.error('Error al eliminar la notificación:', error);
+    res.status(500).json({ error: 'Error al eliminar la notificación' });
+  }
+});
+
+// Ruta para marcar notificaciones como leídas
+app.patch('/notificaciones/marcarLeidas', async (req, res) => {
+  try {
+    await Notificacion.updateMany({ leida: false }, { $set: { leida: true } });
+    res.status(200).json({ message: 'Notificaciones marcadas como leídas' });
+  } catch (error) {
+    console.error('Error al marcar las notificaciones como leídas:', error);
+    res.status(500).json({ error: 'Error al marcar las notificaciones como leídas' });
+  }
+});
+
 const storage = new Storage({
   projectId: process.env.PROJECT_ID,
   keyFilename: process.env.KEYFILENAME,
@@ -176,7 +282,7 @@ app.get("/image-url/:filename", async (req, res) => {
 mongoDB.connect
   .then((message) => {
     console.log(message);
-    app.listen(port, () => {
+    server.listen(port, () => {
       console.log("Server is listening on port", port);
     });
   })
