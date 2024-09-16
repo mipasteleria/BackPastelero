@@ -17,6 +17,7 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const costsRoutes = require("./src/routes/costs.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
 const punycode = require("punycode");
 
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
@@ -41,7 +42,7 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 app.use("/costs", costsRoutes)
-
+app.use("/send-confirmation-email",sendConfirmationEmail)
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
