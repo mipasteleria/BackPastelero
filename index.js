@@ -4,6 +4,8 @@ require("dotenv").config();
 const { Storage } = require("@google-cloud/storage");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
+const http = require('http'); 
+const { Server } = require('socket.io'); 
 const path = require("path");
 const port = process.env.PORT || 3001;
 const mongoDB = require("./src/database/db.js");
@@ -16,6 +18,8 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const costsRoutes = require("./src/routes/costs.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const punycode = require("punycode");
+
 const cors = require("cors");
 
 const corsOptions = {
@@ -35,7 +39,69 @@ app.use("/insumos", insumosRoutes);
 app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
-app.use("/costs", costsRoutes);
+app.use("/costs", costsRoutes)
+
+app.get("/", (req, res) => {
+  res.send(`
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Estás en Línea</title>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f0f4f8;
+                    font-family: Arial, sans-serif;
+                    text-align: center;
+                }
+                .container {
+                    background-color: #ffffff;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                    padding: 20px;
+                    max-width: 400px;
+                    width: 100%;
+                }
+                h1 {
+                    color: #333333;
+                    margin-bottom: 20px;
+                }
+                p {
+                    color: #555555;
+                    font-size: 1.1em;
+                }
+                .button {
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 10px 20px;
+                    background-color: #007bff;
+                    color: #ffffff;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    font-size: 1em;
+                    transition: background-color 0.3s ease;
+                }
+                .button:hover {
+                    background-color: #0056b3;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>¡Estás en Línea!</h1>
+                <p>Tu backend está funcionando correctamente. Si ves este mensaje, significa que todo está configurado bien.</p>
+                <a href="/" class="button">Volver al Inicio</a>
+            </div>
+        </body>
+        </html>
+    `);
+});
 
 const storage = new Storage({
   projectId: process.env.GCLOUD_PROJECT_ID,
@@ -121,7 +187,7 @@ app.get("/images", (req, res) => {
 mongoDB.connect
   .then((message) => {
     console.log(message);
-    app.listen(port, () => {
+    server.listen(port, () => {
       console.log("Server is listening on port", port);
     });
   })
