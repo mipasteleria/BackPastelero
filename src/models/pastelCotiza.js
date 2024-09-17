@@ -104,6 +104,7 @@ const pastelSchema = new mongoose.Schema(
     userId: {
       type: String,
     },
+    images: [String],
   },
   {
     timestamps: true,
