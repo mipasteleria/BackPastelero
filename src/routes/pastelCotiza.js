@@ -6,13 +6,15 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 //Enviar Cotización Cake
 router.post("/", async (req, res) => {
   try {
-    let price = req.body;
-    const newPrice = await Prices.create(price);
+    const { images, ...priceDetails } = req.body;
+    const newPrice = await Prices.create({
+      ...priceDetails,
+      images: images,
+    });
     await newPrice.save();
-    res.status(201).send({ message: "Price Cake created", data: newPrice });
+    res.status(201).send({ message: "Price cupcake created", data: newPrice });
   } catch (error) {
-    console.log("entra a error");
-    res.status(400).send({ message: error });
+    res.status(400).send({ message: error.message });
   }
 });
 
@@ -42,7 +44,7 @@ router.put("/:id", async (req, res) => {
     const { id } = req.params;
     const newPrice = req.body;
 
-    console.log('Received data for update:', newPrice);
+    console.log("Received data for update:", newPrice);
 
     const updatedPrice = await Prices.findByIdAndUpdate(id, newPrice, {
       new: true,
@@ -58,7 +60,6 @@ router.put("/:id", async (req, res) => {
     res.status(400).send({ message: error.message });
   }
 });
-
 
 //Borra Cotizacion por ID Cake
 router.delete("/:id", async (req, res) => {

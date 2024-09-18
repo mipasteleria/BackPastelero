@@ -6,12 +6,15 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 //Enviar Cotización Snack
 router.post("/", async (req, res) => {
   try {
-    let price = req.body;
-    const newPrice = await Prices.create(price);
+    const { images, ...priceDetails } = req.body;
+    const newPrice = await Prices.create({
+      ...priceDetails,
+      images: images,
+    });
     await newPrice.save();
-    res.status(201).send({ message: "Price Snack created", data: newPrice });
+    res.status(201).send({ message: "Price cupcake created", data: newPrice });
   } catch (error) {
-    res.status(400).send({ message: error });
+    res.status(400).send({ message: error.message });
   }
 });
 

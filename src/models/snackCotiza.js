@@ -89,12 +89,13 @@ const snacksSchema = new mongoose.Schema(
       type: Number,
     },
     status: {
-      type: Boolean,
+      type: String,
       default: "Pendiente",
     },
     userId: {
       type: String,
     },
+    images: [String],
   },
   {
     timestamps: true,
