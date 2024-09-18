@@ -13,6 +13,7 @@ const pricesSnackRoutes = require("./src/routes/snackCotiza.js");
 const insumosRoutes = require("./src/routes/insumos.js");
 const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
+const notificacionesRoutes = require("./src/routes/notificaciones");
 const costsRoutes = require("./src/routes/costs.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 
@@ -36,6 +37,7 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 app.use("/costs", costsRoutes);
+app.use("/notificaciones", notificacionesRoutes)
 
 const storage = new Storage({
   projectId: process.env.GCLOUD_PROJECT_ID,
