@@ -16,8 +16,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Recuperar Datos Cotización Cake
-router.get("/", async (req, res) => {
+//Recuperar Datos Cotización Cake (listado completo) — solo admin
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const pricesData = await Prices.find();
     res.send({ message: "All Prices Cake", data: pricesData });
@@ -37,7 +37,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.put("/:id", async (req, res) => {
+// Actualizar cotización Cake — solo admin
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const newPrice = req.body;
@@ -60,8 +61,8 @@ router.put("/:id", async (req, res) => {
 });
 
 
-//Borra Cotizacion por ID Cake
-router.delete("/:id", async (req, res) => {
+//Borra Cotizacion por ID Cake — solo admin
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     await Prices.findByIdAndDelete(id);

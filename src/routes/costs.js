@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const Cost = require('../models/costs');
+const checkRoleToken = require('../middlewares/myRoleToken');
 
-// Crear un nuevo costo (POST)
-router.post('/', async (req, res) => {
+// Crear un nuevo costo (POST) — solo admin
+router.post('/', checkRoleToken('admin'), async (req, res) => {
   try {
     const { fixedCosts, laborCosts } = req.body;
 
@@ -38,8 +39,8 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Actualizar un costo por ID (PUT)
-router.put('/:id', async (req, res) => {
+// Actualizar un costo por ID (PUT) — solo admin
+router.put('/:id', checkRoleToken('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const { fixedCosts, laborCosts } = req.body;
