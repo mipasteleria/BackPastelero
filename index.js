@@ -10,6 +10,7 @@ const path = require("path");
 const checkRoleToken = require("./src/middlewares/myRoleToken.js");
 const { requireAuth } = checkRoleToken;
 const mongoDB = require("./src/database/db.js");
+const { startReminderCron } = require("./src/jobs/reminderCron");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
 const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
@@ -233,6 +234,7 @@ app.get("/image-url/:filename", async (req, res) => {
 mongoDB.connect
   .then((message) => {
     console.log(message);
+    startReminderCron();
     app.listen(port, () => {
       console.log("Server is listening on port", port);
     });
