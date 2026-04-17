@@ -3,8 +3,8 @@ const router = express.Router();
 const Insumos = require("../models/insumos");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
-// Enviar Insumo (POST)
-router.post("/", async (req, res) => {
+// Enviar Insumo (POST) — solo admin
+router.post("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const insumo = req.body;
     const newInsumo = await Insumos.create(insumo);
@@ -48,8 +48,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Actualizar un Insumo (PUT)
-router.put("/:id", async (req, res) => {
+// Actualizar un Insumo (PUT) — solo admin
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const updatedInsumo = await Insumos.findByIdAndUpdate(id, req.body, {
@@ -64,8 +64,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Eliminar un Insumo (DELETE)
-router.delete("/:id", async (req, res) => {
+// Eliminar un Insumo (DELETE) — solo admin
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const deletedInsumo = await Insumos.findByIdAndDelete(id);

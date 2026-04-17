@@ -88,9 +88,16 @@ const snacksSchema = new mongoose.Schema(
     anticipo: {
       type: Number,
     },
+    saldoPendiente: {
+      type: Number,
+      default: 0,
+    },
     status: {
-      type: Boolean,
+      type: String,
       default: "Pendiente",
+    },
+    reminderSentAt: {
+      type: Date,
     },
     userId: {
       type: String,

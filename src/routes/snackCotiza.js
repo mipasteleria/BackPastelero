@@ -15,8 +15,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Recuperar Datos Cotización Snack
-router.get("/", async (req, res) => {
+//Recuperar Datos Cotización Snack — solo admin
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const pricesData = await Prices.find();
     res.send({ message: "All Prices Snack", data: pricesData });
@@ -36,8 +36,8 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-//Actualiza Cotizacion por ID Snack
-router.put("/:id", async (req, res) => {
+//Actualiza Cotizacion por ID Snack — solo admin
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const newPrice = req.body;
@@ -50,8 +50,8 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-//Borra Cotizacion por ID Snack
-router.delete("/:id", async (req, res) => {
+//Borra Cotizacion por ID Snack — solo admin
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     await Prices.findByIdAndDelete(id);
