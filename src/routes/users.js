@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const User = require("../models/users");
 const checkRoleToken = require("../middlewares/myRoleToken");
+const { requireAuth } = checkRoleToken;
 
 // Registro (endpoint público)
 // IMPORTANTE: solo tomamos los campos permitidos del body. NUNCA aceptamos
@@ -61,6 +62,22 @@ router.post("/login", async (req, res) => {
       message: error.message || "An error occurred during login",
       error,
     });
+  }
+});
+
+// Perfil del usuario autenticado. Devuelve el rol verificado contra la BD
+// (nunca confiamos en lo que diga el JWT sobre rol sin ratificarlo).
+// El front lo usa para saber si es admin en vez de hacer jwt.decode().
+router.get("/me", requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+    res.status(200).json({ data: user });
+  } catch (error) {
+    console.error("Error en /users/me:", error);
+    res.status(500).json({ message: "Error al obtener el usuario" });
   }
 });
 

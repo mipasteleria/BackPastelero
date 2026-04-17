@@ -20,6 +20,7 @@ const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const notificacionesRoutes = require("./src/routes/notificaciones");
 const costsRoutes = require("./src/routes/costs.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
 const cors = require("cors");
 
@@ -44,6 +45,13 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// IMPORTANTE: el webhook de Stripe debe recibir el body CRUDO para que la
+// verificación de firma HMAC funcione. Se monta con express.raw ANTES de
+// express.json(), que de lo contrario transformaría el buffer y rompería
+// la firma. Cualquier otra ruta sigue usando JSON como siempre.
+app.use("/webhook/stripe", express.raw({ type: "application/json" }), stripeWebhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
