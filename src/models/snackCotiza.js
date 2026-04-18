@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const costeoSnapshotSchema = require("./costeoSnapshot");
 
 const snacksSchema = new mongoose.Schema(
   {
@@ -101,6 +102,11 @@ const snacksSchema = new mongoose.Schema(
     },
     userId: {
       type: String,
+    },
+    images: [{ type: String }],
+    costeoSnapshot: {
+      type: costeoSnapshotSchema,
+      default: null,
     },
   },
   {
