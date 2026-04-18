@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Prices = require("../models/snackCotiza");
 const checkRoleToken = require("../middlewares/myRoleToken");
+const { requireAuth } = checkRoleToken;
+const { calcularCosteo } = require("../jobs/costeoHandler");
 
 //Enviar Cotización Snack
 router.post("/", async (req, res) => {
@@ -15,11 +17,12 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Recuperar Datos Cotización Snack — solo admin
-router.get("/", checkRoleToken("admin"), async (req, res) => {
+//Recuperar Datos Cotización Snack — admin ve todo, user solo sus propias
+router.get("/", requireAuth, async (req, res) => {
   try {
-    const pricesData = await Prices.find();
-    res.send({ message: "All Prices Snack", data: pricesData });
+    const filter = req.user.role === "admin" ? {} : { userId: String(req.user._id) };
+    const pricesData = await Prices.find(filter);
+    res.send({ message: "All Prices Snack", data: pricesData, total: pricesData.length });
   } catch (error) {
     res.status(400).send({ message: error });
   }
@@ -58,6 +61,27 @@ router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
     res.send({ message: "Price deleted" });
   } catch (error) {
     res.status(400).send({ message: error });
+  }
+});
+
+// Calcular y guardar costeo — solo admin
+// Snack: porciones = people * portionsPerPerson
+// Body: { recetaId, tecnicaIds[], margenDeseado, ivaPercent? }
+router.post("/:id/costeo", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const cotizacion = await Prices.findById(req.params.id);
+    if (!cotizacion) return res.status(404).json({ message: "Cotización no encontrada" });
+
+    const people = parseInt(cotizacion.people, 10);
+    const perPerson = parseInt(cotizacion.portionsPerPerson, 10);
+    const porciones = people * perPerson;
+    if (!porciones || porciones <= 0)
+      return res.status(400).json({ message: "La cotización no tiene porciones válidas" });
+
+    const snapshot = await calcularCosteo(cotizacion, porciones, req.body);
+    res.json({ message: "Costeo calculado", data: snapshot });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

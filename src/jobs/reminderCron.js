@@ -66,10 +66,12 @@ async function runReminders() {
 
   console.log(`[reminderCron] Buscando entregas en: ${targetDates.join(", ")}`);
 
+  // deliveryDate puede ser "DD/MM/YYYY" (seed) o "DD/MM/YYYY HH:MM" (form).
+  // $regex con ancla "^" matchea ambos formatos.
   const query = {
     status: "Agendado con el 50%",
     reminderSentAt: null,
-    deliveryDate: { $in: targetDates },
+    $or: targetDates.map((d) => ({ deliveryDate: { $regex: new RegExp(`^${d}`) } })),
   };
 
   const [pasteles, cupcakes, snacks] = await Promise.all([
