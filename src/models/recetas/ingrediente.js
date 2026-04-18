@@ -1,6 +1,11 @@
 const mongoose = require("mongoose");
 
 const ingredienteSchema = new mongoose.Schema({
+  insumoId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Insumos",
+    default: null,
+  },
   ingrediente: {
     type: String,
     required: true,
