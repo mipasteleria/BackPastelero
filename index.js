@@ -20,6 +20,8 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const notificacionesRoutes = require("./src/routes/notificaciones");
 const costsRoutes = require("./src/routes/costs.js");
+const tecnicasCreativasRoutes = require("./src/routes/tecnicasCreativas.js");
+const productosRoutes = require("./src/routes/productos.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
@@ -65,6 +67,8 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 app.use("/costs", costsRoutes);
+app.use("/tecnicas", tecnicasCreativasRoutes);
+app.use("/productos", productosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
 app.get("/", (req, res) => {
@@ -131,7 +135,9 @@ app.get("/", (req, res) => {
 
 const storage = new Storage({
   projectId: process.env.PROJECT_ID,
-  keyFilename: process.env.KEYFILENAME,
+  credentials: process.env.GCS_CREDENTIALS
+    ? JSON.parse(process.env.GCS_CREDENTIALS)
+    : undefined,
 });
 
 const bucketName = process.env.BUCKET_NAME;
@@ -205,8 +211,8 @@ app.post("/upload", requireAuth, (req, res, next) => {
     Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName)))
       .then((results) => res.status(200).json(results))
       .catch((e) => {
-        console.error("Error uploading files:", e);
-        res.status(500).json({ error: "Error uploading files" });
+        console.error("Error uploading files:", e.message, e.code ?? "");
+        res.status(500).json({ error: e.message || "Error uploading files" });
       });
   });
 });
