@@ -1,11 +1,12 @@
 const mongoose = require("mongoose");
-const URI = `mongodb+srv://${process.env.USER_DB}:${process.env.PASSWORD_DB}@cluster0.fj4rg22.mongodb.net/pasteleros`;
 
-const connect = new Promise(async (resolve, reject) => {
-  let conn = await mongoose.connect(URI);
-  if (conn) resolve("Success connection to DB");
-  reject("Error connecting to DB");
-});
+if (!process.env.MONGO_URL) {
+  throw new Error("MONGO_URL no está definida en el entorno (.env)");
+}
+
+const connect = mongoose
+  .connect(process.env.MONGO_URL)
+  .then(() => "Success connection to DB");
 
 module.exports = {
   connect,
