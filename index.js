@@ -133,11 +133,16 @@ app.get("/", (req, res) => {
     `);
 });
 
+let gcsCredentials;
+try {
+  gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+} catch {
+  console.error("GCS_CREDENTIALS is not valid JSON — uploads will be disabled");
+}
+
 const storage = new Storage({
   projectId: process.env.PROJECT_ID,
-  credentials: process.env.GCS_CREDENTIALS
-    ? JSON.parse(process.env.GCS_CREDENTIALS)
-    : undefined,
+  credentials: gcsCredentials,
 });
 
 const bucketName = process.env.BUCKET_NAME;
