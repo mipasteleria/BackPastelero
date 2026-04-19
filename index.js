@@ -237,19 +237,25 @@ app.get("/image-url/:filename", async (req, res) => {
   }
 });
 
-mongoDB.connect
-  .then((message) => {
-    console.log(message);
-    startReminderCron();
-    app.listen(port, () => {
-      console.log("Server is listening on port", port);
-    });
-  })
-  .catch((error) => {
-    console.error("Error connecting to MongoDB:", error);
-  });
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+// En Vercel (serverless) la conexión se inicia al cargar el módulo y se
+// exporta el app directamente. En local se usa app.listen() como siempre.
+if (!process.env.VERCEL) {
+  mongoDB.connect
+    .then((message) => {
+      console.log(message);
+      startReminderCron();
+      app.listen(port, () => {
+        console.log("Server is listening on port", port);
+      });
+    })
+    .catch((error) => {
+      console.error("Error connecting to MongoDB:", error);
+    });
+}
+
+module.exports = app;
