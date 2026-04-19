@@ -71,6 +71,10 @@ app.use("/tecnicas", tecnicasCreativasRoutes);
 app.use("/productos", productosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", ts: Date.now() });
+});
+
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
@@ -133,14 +137,14 @@ app.get("/", (req, res) => {
     `);
 });
 
-const storage = new Storage({
-  projectId: process.env.PROJECT_ID,
-  credentials: process.env.GCS_CREDENTIALS
-    ? JSON.parse(process.env.GCS_CREDENTIALS)
-    : undefined,
-});
-
+let storage = null;
 const bucketName = process.env.BUCKET_NAME;
+try {
+  const gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+  storage = new Storage({ projectId: process.env.PROJECT_ID, credentials: gcsCredentials });
+} catch (e) {
+  console.error("GCS init failed — uploads disabled:", e.message);
+}
 
 // Configuración de multer para usar Google Cloud Storage directamente.
 // Validamos tipo (sólo imágenes web) y tamaño (8 MB por archivo, 5 archivos).
@@ -201,6 +205,7 @@ async function uploadFileToGCS(file, bucketName) {
 // El fileFilter de multer rechaza tipos no permitidos; aquí capturamos el error
 // y devolvemos 400 en lugar de 500 genérico.
 app.post("/upload", requireAuth, (req, res, next) => {
+  if (!storage) return res.status(503).json({ error: "File upload not configured" });
   upload.array("files")(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
@@ -237,19 +242,25 @@ app.get("/image-url/:filename", async (req, res) => {
   }
 });
 
-mongoDB.connect
-  .then((message) => {
-    console.log(message);
-    startReminderCron();
-    app.listen(port, () => {
-      console.log("Server is listening on port", port);
-    });
-  })
-  .catch((error) => {
-    console.error("Error connecting to MongoDB:", error);
-  });
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+// En Vercel (serverless) la conexión se inicia al cargar el módulo y se
+// exporta el app directamente. En local se usa app.listen() como siempre.
+if (!process.env.VERCEL) {
+  mongoDB.connect
+    .then((message) => {
+      console.log(message);
+      startReminderCron();
+      app.listen(port, () => {
+        console.log("Server is listening on port", port);
+      });
+    })
+    .catch((error) => {
+      console.error("Error connecting to MongoDB:", error);
+    });
+}
+
+module.exports = app;
