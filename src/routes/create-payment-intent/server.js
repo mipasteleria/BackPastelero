@@ -1,13 +1,37 @@
 require("dotenv").config();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const express = require('express');
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const express = require("express");
 const router = express.Router();
-const FRONT_DOMAIN = process.env.FRONT_DOMAIN;
-const YOUR_DOMAIN = process.env.YOUR_DOMAIN;
-const Payment = require("../../models/paymentModels");
+const { requireAuth } = require("../../middlewares/myRoleToken.js");
 
-// Redirige al dominio frontal
-router.get('/', (req, res) => {
+const FRONT_DOMAIN = process.env.FRONT_DOMAIN;
+const Payment = require("../../models/paymentModels");
+const Pastel = require("../../models/pastelCotiza");
+const Cupcake = require("../../models/cupcakesCotiza");
+const Snack = require("../../models/snackCotiza");
+
+const { PAYMENT_OPTIONS, COTIZA_TYPES } = Payment;
+
+/**
+ * Resuelve el modelo Mongoose según el tipo de cotización.
+ * Mantenemos el switch explícito (en lugar de refPath) porque son solo
+ * 3 tipos y la intención queda visible en código.
+ */
+function getCotizaModel(type) {
+  switch (type) {
+    case "Pastel":
+      return Pastel;
+    case "Cupcake":
+      return Cupcake;
+    case "Snack":
+      return Snack;
+    default:
+      return null;
+  }
+}
+
+// Redirige al dominio frontal (endpoint legacy, se mantiene)
+router.get("/", (req, res) => {
   try {
     res.redirect(FRONT_DOMAIN + req.originalUrl);
   } catch (error) {
@@ -16,39 +40,152 @@ router.get('/', (req, res) => {
   }
 });
 
-// Crea una sesión de checkout
-router.post('/create-checkout-session', async (req, res) => {
+/**
+ * POST /checkout/create-checkout-session
+ *
+ * Body esperado:
+ *   {
+ *     cotizacionId: "<ObjectId>",
+ *     cotizacionType: "Pastel" | "Cupcake" | "Snack",
+ *     paymentOption: "anticipo" | "total" | "saldo"
+ *   }
+ *
+ * IMPORTANTE: el monto NUNCA viene del cliente — se calcula en el servidor
+ * leyendo la cotización. Así un usuario malicioso no puede pagar $1 MXN
+ * por un pastel de $3000.
+ *
+ * Reglas de idempotencia:
+ *   - Si la cotización ya tiene un Payment con status "paid" y
+ *     paymentOption "total" → error (ya pagado).
+ *   - Si piden "anticipo" y ya hay un anticipo "paid" → error
+ *     (deben usar "saldo" para liquidar).
+ *   - Si piden "saldo" y no existe anticipo previo → error.
+ */
+router.post("/create-checkout-session", requireAuth, async (req, res) => {
   try {
-    const { amount, quantity, userId } = req.body;
+    const { cotizacionId, cotizacionType, paymentOption } = req.body;
 
-    // Crear sesión en Stripe
+    if (!cotizacionId || !cotizacionType || !paymentOption) {
+      return res.status(400).json({
+        message: "Faltan campos: cotizacionId, cotizacionType, paymentOption",
+      });
+    }
+    if (!COTIZA_TYPES.includes(cotizacionType)) {
+      return res.status(400).json({
+        message: `cotizacionType inválido. Use: ${COTIZA_TYPES.join(", ")}`,
+      });
+    }
+    if (!PAYMENT_OPTIONS.includes(paymentOption)) {
+      return res.status(400).json({
+        message: `paymentOption inválido. Use: ${PAYMENT_OPTIONS.join(", ")}`,
+      });
+    }
+
+    const Model = getCotizaModel(cotizacionType);
+    const cotizacion = await Model.findById(cotizacionId);
+    if (!cotizacion) {
+      return res.status(404).json({ message: "Cotización no encontrada" });
+    }
+
+    // El usuario autenticado debe ser dueño de la cotización.
+    // (Admins podrán pagar en nombre del cliente desde el dashboard, lo
+    // añadiremos más adelante cuando hagamos el flujo admin.)
+    if (cotizacion.userId && cotizacion.userId !== String(req.user._id)) {
+      return res.status(403).json({ message: "No eres dueño de esta cotización" });
+    }
+
+    const precio = Number(cotizacion.precio);
+    const anticipoMonto = Number(cotizacion.anticipo);
+    if (!precio || precio <= 0) {
+      return res.status(400).json({
+        message: "La cotización no tiene precio definido por el admin",
+      });
+    }
+
+    // Determinar monto + reglas de idempotencia consultando pagos previos.
+    const previosPaid = await Payment.find({
+      cotizacionId,
+      cotizacionType,
+      status: "paid",
+    });
+    const anticipoPagado = previosPaid.find((p) => p.paymentOption === "anticipo");
+    const totalPagado = previosPaid.find(
+      (p) => p.paymentOption === "total" || p.paymentOption === "saldo"
+    );
+
+    let amount;
+    if (paymentOption === "total") {
+      if (totalPagado || anticipoPagado) {
+        return res.status(409).json({
+          message: "Esta cotización ya tiene pagos registrados. Usa 'saldo' si corresponde.",
+        });
+      }
+      amount = precio;
+    } else if (paymentOption === "anticipo") {
+      if (anticipoPagado) {
+        return res.status(409).json({
+          message: "Ya se pagó el anticipo. Usa paymentOption='saldo' para liquidar.",
+        });
+      }
+      if (!anticipoMonto || anticipoMonto <= 0) {
+        return res.status(400).json({
+          message: "La cotización no tiene anticipo definido",
+        });
+      }
+      amount = anticipoMonto;
+    } else if (paymentOption === "saldo") {
+      if (!anticipoPagado) {
+        return res.status(409).json({
+          message: "No existe anticipo previo para liquidar",
+        });
+      }
+      if (totalPagado) {
+        return res.status(409).json({
+          message: "Esta cotización ya está totalmente pagada",
+        });
+      }
+      amount = precio - anticipoMonto;
+      if (amount <= 0) {
+        return res.status(400).json({
+          message: "El saldo calculado no es positivo",
+        });
+      }
+    }
+
+    const productLabel = `${cotizacionType} (${paymentOption}) - cotización ${cotizacionId}`;
+
     const session = await stripe.checkout.sessions.create({
-      ui_mode: 'embedded',
+      ui_mode: "embedded",
       line_items: [
         {
           price_data: {
-            currency: 'mxn',
-            product_data: {
-              name: "Pastel",
-              
-            },
-            unit_amount: (amount *100), // Aquí utilizas `unit_amount` en lugar de `amount`
+            currency: "mxn",
+            product_data: { name: productLabel },
+            unit_amount: Math.round(amount * 100), // Stripe usa centavos
           },
-          quantity: quantity, // Aquí `quantity` es un parámetro válido para `line_items`
+          quantity: 1,
         },
       ],
-      mode: 'payment',
-      
+      mode: "payment",
       return_url: `${FRONT_DOMAIN}/enduser/return?session_id={CHECKOUT_SESSION_ID}`,
-    //  cancel_url: `${FRONT_DOMAIN}/cancel`,
+      metadata: {
+        cotizacionId: String(cotizacionId),
+        cotizacionType,
+        paymentOption,
+        userId: String(req.user._id),
+      },
     });
 
-    // Guardar la sesión en la base de datos
     await Payment.create({
-      Items: quantity,
-      amount: amount,
-      status: 'Pendiente', // O 'No aprobado' como valor por defecto
-      userId: userId, // Guardar el userId, si es necesario
+      stripeSessionId: session.id,
+      cotizacionId,
+      cotizacionType,
+      paymentOption,
+      amount,
+      status: "pending",
+      userId: String(req.user._id),
+      email: req.user.email,
+      name: req.user.name,
     });
 
     res.send({ clientSecret: session.client_secret });
@@ -58,20 +195,24 @@ router.post('/create-checkout-session', async (req, res) => {
   }
 });
 
-// Obtiene el estado de la sesión
-router.get('/session-status', async (req, res) => {
+/**
+ * GET /checkout/session-status?session_id=...
+ *
+ * El front lo usa para pintar la página de "return" después de Stripe.
+ * La fuente de verdad sigue siendo el webhook — esto es solo UX.
+ */
+router.get("/session-status", requireAuth, async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
-
-    // Actualizar el estado de la sesión en la base de datos
-    await Payment.updateOne(
-      { /* Aquí debes identificar el registro basado en session_id si lo has guardado antes */ },
-      { $set: { status: session.status } }
-    );
+    const payment = await Payment.findOne({ stripeSessionId: session.id });
 
     res.send({
       status: session.status,
-      customer_email: session.customer_details.email
+      payment_status: session.payment_status,
+      customer_email: session.customer_details?.email,
+      cotizacionId: payment?.cotizacionId,
+      cotizacionType: payment?.cotizacionType,
+      paymentOption: payment?.paymentOption,
     });
   } catch (error) {
     console.error("Error al obtener el estado de la sesión:", error);

@@ -10,6 +10,7 @@ const path = require("path");
 const checkRoleToken = require("./src/middlewares/myRoleToken.js");
 const { requireAuth } = checkRoleToken;
 const mongoDB = require("./src/database/db.js");
+const { startReminderCron } = require("./src/jobs/reminderCron");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
 const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
@@ -19,7 +20,10 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const notificacionesRoutes = require("./src/routes/notificaciones");
 const costsRoutes = require("./src/routes/costs.js");
+const tecnicasCreativasRoutes = require("./src/routes/tecnicasCreativas.js");
+const productosRoutes = require("./src/routes/productos.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
+const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
 const cors = require("cors");
 
@@ -44,6 +48,13 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// IMPORTANTE: el webhook de Stripe debe recibir el body CRUDO para que la
+// verificación de firma HMAC funcione. Se monta con express.raw ANTES de
+// express.json(), que de lo contrario transformaría el buffer y rompería
+// la firma. Cualquier otra ruta sigue usando JSON como siempre.
+app.use("/webhook/stripe", express.raw({ type: "application/json" }), stripeWebhook);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,8 +67,14 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 app.use("/costs", costsRoutes);
+app.use("/tecnicas", tecnicasCreativasRoutes);
+app.use("/productos", productosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", ts: Date.now() });
+});
+
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
@@ -120,12 +137,14 @@ app.get("/", (req, res) => {
     `);
 });
 
-const storage = new Storage({
-  projectId: process.env.PROJECT_ID,
-  keyFilename: process.env.KEYFILENAME,
-});
-
+let storage = null;
 const bucketName = process.env.BUCKET_NAME;
+try {
+  const gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+  storage = new Storage({ projectId: process.env.PROJECT_ID, credentials: gcsCredentials });
+} catch (e) {
+  console.error("GCS init failed — uploads disabled:", e.message);
+}
 
 // Configuración de multer para usar Google Cloud Storage directamente.
 // Validamos tipo (sólo imágenes web) y tamaño (8 MB por archivo, 5 archivos).
@@ -186,6 +205,7 @@ async function uploadFileToGCS(file, bucketName) {
 // El fileFilter de multer rechaza tipos no permitidos; aquí capturamos el error
 // y devolvemos 400 en lugar de 500 genérico.
 app.post("/upload", requireAuth, (req, res, next) => {
+  if (!storage) return res.status(503).json({ error: "File upload not configured" });
   upload.array("files")(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
@@ -196,8 +216,8 @@ app.post("/upload", requireAuth, (req, res, next) => {
     Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName)))
       .then((results) => res.status(200).json(results))
       .catch((e) => {
-        console.error("Error uploading files:", e);
-        res.status(500).json({ error: "Error uploading files" });
+        console.error("Error uploading files:", e.message, e.code ?? "");
+        res.status(500).json({ error: e.message || "Error uploading files" });
       });
   });
 });
@@ -222,18 +242,25 @@ app.get("/image-url/:filename", async (req, res) => {
   }
 });
 
-mongoDB.connect
-  .then((message) => {
-    console.log(message);
-    app.listen(port, () => {
-      console.log("Server is listening on port", port);
-    });
-  })
-  .catch((error) => {
-    console.error("Error connecting to MongoDB:", error);
-  });
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+// En Vercel (serverless) la conexión se inicia al cargar el módulo y se
+// exporta el app directamente. En local se usa app.listen() como siempre.
+if (!process.env.VERCEL) {
+  mongoDB.connect
+    .then((message) => {
+      console.log(message);
+      startReminderCron();
+      app.listen(port, () => {
+        console.log("Server is listening on port", port);
+      });
+    })
+    .catch((error) => {
+      console.error("Error connecting to MongoDB:", error);
+    });
+}
+
+module.exports = app;

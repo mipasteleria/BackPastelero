@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const costeoSnapshotSchema = require("./costeoSnapshot");
 
 const snacksSchema = new mongoose.Schema(
   {
@@ -88,12 +89,24 @@ const snacksSchema = new mongoose.Schema(
     anticipo: {
       type: Number,
     },
+    saldoPendiente: {
+      type: Number,
+      default: 0,
+    },
     status: {
-      type: Boolean,
+      type: String,
       default: "Pendiente",
+    },
+    reminderSentAt: {
+      type: Date,
     },
     userId: {
       type: String,
+    },
+    images: [{ type: String }],
+    costeoSnapshot: {
+      type: costeoSnapshotSchema,
+      default: null,
     },
   },
   {

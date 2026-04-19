@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Insumos = require("../models/insumos");
+const Receta = require("../models/recetas/recetas");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 // Enviar Insumo (POST) — solo admin
@@ -49,16 +50,36 @@ router.get("/:id", async (req, res) => {
 });
 
 // Actualizar un Insumo (PUT) — solo admin
+// Tras actualizar, recalcula automáticamente el precio en todas las recetas
+// que referencian este insumo mediante insumoId.
 router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
-    const updatedInsumo = await Insumos.findByIdAndUpdate(id, req.body, {
-      new: true,
+    const updatedInsumo = await Insumos.findByIdAndUpdate(id, req.body, { new: true });
+    if (!updatedInsumo) return res.status(404).send({ message: "Insumo not found" });
+
+    // Propagar nuevo precio a todas las recetas que usen este insumo
+    const unitCost = updatedInsumo.cost / (updatedInsumo.amount || 1);
+    const recetas = await Receta.find({ "ingredientes.insumoId": id });
+
+    await Promise.all(recetas.map(async (receta) => {
+      receta.ingredientes.forEach((ing) => {
+        if (ing.insumoId?.toString() === id) {
+          ing.precio = Math.round(unitCost * ing.cantidad * 100) / 100;
+          ing.total  = Math.round(unitCost * 100) / 100;
+        }
+      });
+      const ingTotal = receta.ingredientes.reduce((s, i) => s + (i.precio || 0), 0);
+      const rawCost  = ingTotal + (receta.additional_costs || 0);
+      receta.total_cost = Math.round((rawCost + rawCost * (receta.special_tax || 0) / 100) * 100) / 100;
+      await receta.save();
+    }));
+
+    res.status(200).send({
+      message: "Insumo updated",
+      data: updatedInsumo,
+      recetasActualizadas: recetas.length,
     });
-    if (!updatedInsumo) {
-      return res.status(404).send({ message: "Insumo not found" });
-    }
-    res.status(200).send({ message: "Insumo updated", data: updatedInsumo });
   } catch (error) {
     res.status(400).send({ message: error.message });
   }
