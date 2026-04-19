@@ -6,7 +6,10 @@ if (!process.env.MONGO_URL) {
 
 const connect = mongoose
   .connect(process.env.MONGO_URL)
-  .then(() => "Success connection to DB");
+  .then(() => "Success connection to DB")
+  .catch((err) => {
+    console.error("MongoDB connection error:", err.message);
+  });
 
 module.exports = {
   connect,

@@ -71,6 +71,10 @@ app.use("/tecnicas", tecnicasCreativasRoutes);
 app.use("/productos", productosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", ts: Date.now() });
+});
+
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
