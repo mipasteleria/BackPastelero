@@ -133,19 +133,14 @@ app.get("/", (req, res) => {
     `);
 });
 
-let gcsCredentials;
-try {
-  gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
-} catch {
-  console.error("GCS_CREDENTIALS is not valid JSON — uploads will be disabled");
-}
-
-const storage = new Storage({
-  projectId: process.env.PROJECT_ID,
-  credentials: gcsCredentials,
-});
-
+let storage = null;
 const bucketName = process.env.BUCKET_NAME;
+try {
+  const gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+  storage = new Storage({ projectId: process.env.PROJECT_ID, credentials: gcsCredentials });
+} catch (e) {
+  console.error("GCS init failed — uploads disabled:", e.message);
+}
 
 // Configuración de multer para usar Google Cloud Storage directamente.
 // Validamos tipo (sólo imágenes web) y tamaño (8 MB por archivo, 5 archivos).
@@ -206,6 +201,7 @@ async function uploadFileToGCS(file, bucketName) {
 // El fileFilter de multer rechaza tipos no permitidos; aquí capturamos el error
 // y devolvemos 400 en lugar de 500 genérico.
 app.post("/upload", requireAuth, (req, res, next) => {
+  if (!storage) return res.status(503).json({ error: "File upload not configured" });
   upload.array("files")(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
