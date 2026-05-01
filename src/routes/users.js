@@ -174,7 +174,11 @@ router.post("/forgot-password", async (req, res) => {
       return res.status(400).json({ message: "Email requerido" });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    // Log diagnóstico (no expone datos sensibles al cliente)
+    console.log(`[forgot-password] email solicitado: ${normalizedEmail} | usuario encontrado: ${!!user}`);
 
     if (user) {
       // Generar token seguro; guardamos el hash en DB (si la DB se filtra el token plano no sirve)
@@ -188,38 +192,52 @@ router.post("/forgot-password", async (req, res) => {
       const frontDomain = (process.env.FRONT_DOMAIN || "http://localhost:3000").replace(/\/$/, "");
       const resetUrl = `${frontDomain}/reset-password/${rawToken}`;
 
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
-        },
-      });
+      console.log(`[forgot-password] FRONT_DOMAIN: ${process.env.FRONT_DOMAIN || "(no configurado)"}`);
+      console.log(`[forgot-password] EMAIL_USER configurado: ${!!process.env.EMAIL_USER}`);
+      console.log(`[forgot-password] EMAIL_PASS configurado: ${!!process.env.EMAIL_PASS}`);
+      console.log(`[forgot-password] reset URL: ${resetUrl}`);
 
-      await transporter.sendMail({
-        from: `"Pastelería El Ruiseñor" <${process.env.EMAIL_USER}>`,
-        to: user.email,
-        subject: "Recupera tu contraseña — El Ruiseñor",
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff1f2;border-radius:12px;padding:32px;">
-            <h2 style="color:#540027;font-size:1.5rem;margin-bottom:8px;">Restablece tu contraseña</h2>
-            <p style="color:#333;line-height:1.6;">Hola <strong>${user.name}</strong>, recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
-            <p style="color:#333;line-height:1.6;">Haz clic en el botón para elegir una nueva contraseña. El enlace es válido por <strong>1 hora</strong>.</p>
-            <a href="${resetUrl}" style="display:inline-block;margin:24px 0;padding:14px 32px;background:#540027;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.95rem;">
-              Restablecer contraseña
-            </a>
-            <p style="color:#888;font-size:0.82rem;line-height:1.6;">Si no solicitaste este cambio, ignora este correo — tu contraseña no cambiará.</p>
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-            <p style="color:#bbb;font-size:0.75rem;">Pastelería El Ruiseñor · Guadalajara, Jalisco</p>
-          </div>
-        `,
-      });
+      // Separamos el try-catch del email para que un fallo de envío
+      // no devuelva 500 al cliente (seguridad) pero sí quede en logs.
+      try {
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS,
+          },
+        });
+
+        await transporter.sendMail({
+          from: `"Pastelería El Ruiseñor" <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: "Recupera tu contraseña — El Ruiseñor",
+          html: `
+            <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff1f2;border-radius:12px;padding:32px;">
+              <h2 style="color:#540027;font-size:1.5rem;margin-bottom:8px;">Restablece tu contraseña</h2>
+              <p style="color:#333;line-height:1.6;">Hola <strong>${user.name}</strong>, recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+              <p style="color:#333;line-height:1.6;">Haz clic en el botón para elegir una nueva contraseña. El enlace es válido por <strong>1 hora</strong>.</p>
+              <a href="${resetUrl}" style="display:inline-block;margin:24px 0;padding:14px 32px;background:#540027;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.95rem;">
+                Restablecer contraseña
+              </a>
+              <p style="color:#888;font-size:0.82rem;line-height:1.6;">Si no solicitaste este cambio, ignora este correo — tu contraseña no cambiará.</p>
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+              <p style="color:#bbb;font-size:0.75rem;">Pastelería El Ruiseñor · Guadalajara, Jalisco</p>
+            </div>
+          `,
+        });
+
+        console.log(`[forgot-password] email enviado correctamente a ${user.email}`);
+      } catch (emailError) {
+        // Loguear el error real pero no exponer al cliente
+        console.error(`[forgot-password] ERROR al enviar email a ${user.email}:`, emailError.message);
+      }
     }
 
-    // Respuesta genérica: no revelar si el usuario existe o no
+    // Respuesta genérica siempre: no revelar si el usuario existe o no
     res.status(200).json({ message: "Si el correo existe, recibirás un enlace para restablecer tu contraseña." });
   } catch (error) {
-    console.error("Error en /forgot-password:", error);
+    console.error("Error general en /forgot-password:", error);
     res.status(500).json({ message: "Error al procesar la solicitud" });
   }
 });
