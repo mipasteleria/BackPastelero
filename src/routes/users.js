@@ -45,7 +45,10 @@ router.post("/", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: email });
+    // Normalizar email igual que el schema (lowercase + trim) para evitar
+    // que diferencias de mayúsculas hagan fallar la búsqueda.
+    const normalizedEmail = (email || "").toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user || !(await User.isValidPassword(password, user.password))) {
       return res.status(401).send({ message: "Invalid email or password" });
@@ -268,11 +271,17 @@ router.post("/reset-password/:token", async (req, res) => {
       return res.status(400).json({ message: "El enlace es inválido o ha expirado. Solicita uno nuevo." });
     }
 
-    user.password = await User.encryptPassword(password);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
-    await user.save();
+    const hashedPassword = await User.encryptPassword(password);
 
+    // Usar findByIdAndUpdate para actualizar solo los campos relevantes sin
+    // ejecutar validators del schema completo (evita fallos por campos legacy
+    // como teléfono con formato distinto al regex actual).
+    await User.findByIdAndUpdate(user._id, {
+      $set:   { password: hashedPassword },
+      $unset: { resetPasswordToken: "", resetPasswordExpires: "" },
+    });
+
+    console.log(`[reset-password] contraseña actualizada para userId: ${user._id}`);
     res.status(200).json({ message: "Contraseña actualizada correctamente. Ya puedes iniciar sesión." });
   } catch (error) {
     console.error("Error en /reset-password:", error);
