@@ -38,6 +38,14 @@ const userSchema = new mongoose.Schema(
         "Phone number not valid. Must be in the format 000-000-0000",
       ],
     },
+    resetPasswordToken: {
+      type: String,
+      default: undefined,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: undefined,
+    },
     role: {
       type: String,
       enum: roles,

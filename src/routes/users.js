@@ -3,6 +3,8 @@ const router = express.Router();
 const User = require("../models/users");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
+const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 
 // Registro (endpoint público)
 // IMPORTANTE: solo tomamos los campos permitidos del body. NUNCA aceptamos
@@ -159,6 +161,104 @@ router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error al eliminar el usuario" });
+  }
+});
+
+// POST /users/forgot-password — solicitar restablecimiento de contraseña
+// Endpoint público: no requiere auth.
+// Siempre responde con el mismo mensaje para no revelar si el email existe.
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ message: "Email requerido" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    if (user) {
+      // Generar token seguro; guardamos el hash en DB (si la DB se filtra el token plano no sirve)
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+      await user.save();
+
+      const frontDomain = (process.env.FRONT_DOMAIN || "http://localhost:3000").replace(/\/$/, "");
+      const resetUrl = `${frontDomain}/reset-password/${rawToken}`;
+
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+      });
+
+      await transporter.sendMail({
+        from: `"Pastelería El Ruiseñor" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: "Recupera tu contraseña — El Ruiseñor",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff1f2;border-radius:12px;padding:32px;">
+            <h2 style="color:#540027;font-size:1.5rem;margin-bottom:8px;">Restablece tu contraseña</h2>
+            <p style="color:#333;line-height:1.6;">Hola <strong>${user.name}</strong>, recibimos una solicitud para restablecer la contraseña de tu cuenta.</p>
+            <p style="color:#333;line-height:1.6;">Haz clic en el botón para elegir una nueva contraseña. El enlace es válido por <strong>1 hora</strong>.</p>
+            <a href="${resetUrl}" style="display:inline-block;margin:24px 0;padding:14px 32px;background:#540027;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.95rem;">
+              Restablecer contraseña
+            </a>
+            <p style="color:#888;font-size:0.82rem;line-height:1.6;">Si no solicitaste este cambio, ignora este correo — tu contraseña no cambiará.</p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+            <p style="color:#bbb;font-size:0.75rem;">Pastelería El Ruiseñor · Guadalajara, Jalisco</p>
+          </div>
+        `,
+      });
+    }
+
+    // Respuesta genérica: no revelar si el usuario existe o no
+    res.status(200).json({ message: "Si el correo existe, recibirás un enlace para restablecer tu contraseña." });
+  } catch (error) {
+    console.error("Error en /forgot-password:", error);
+    res.status(500).json({ message: "Error al procesar la solicitud" });
+  }
+});
+
+// POST /users/reset-password/:token — establecer nueva contraseña con el token
+// Endpoint público: el token crudo viene en la URL, se compara contra el hash en DB.
+router.post("/reset-password/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body || {};
+
+    if (!token || !password) {
+      return res.status(400).json({ message: "Token y contraseña son requeridos" });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ message: "La contraseña debe tener al menos 8 caracteres" });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "El enlace es inválido o ha expirado. Solicita uno nuevo." });
+    }
+
+    user.password = await User.encryptPassword(password);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.status(200).json({ message: "Contraseña actualizada correctamente. Ya puedes iniciar sesión." });
+  } catch (error) {
+    console.error("Error en /reset-password:", error);
+    res.status(500).json({ message: "Error al actualizar la contraseña" });
   }
 });
 
