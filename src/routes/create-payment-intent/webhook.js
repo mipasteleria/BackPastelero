@@ -7,6 +7,9 @@ const Payment = require("../../models/paymentModels");
 const Pastel = require("../../models/pastelCotiza");
 const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
+const GalletaPedido = require("../../models/galletaPedido");
+const GalletaSabor  = require("../../models/galletaSabor");
+const { sendGalletaConfirmation, sendLowStockAlert } = require("./galletaEmails");
 
 /**
  * POST /webhook/stripe
@@ -110,15 +113,33 @@ router.post("/", async (req, res) => {
   }
 
   try {
+    const session = event.data.object;
+    // Las sesiones de Galletas NY se distinguen por metadata.tipo. Las
+    // cotizaciones tradicionales no traen ese campo, así que el switch
+    // por tipo de evento sigue su flujo original.
+    const esGalletaNY = session?.metadata?.tipo === "galleta_ny";
+
     switch (event.type) {
       case "checkout.session.completed":
-        await markPaymentFinal(event.data.object, "paid");
+        if (esGalletaNY) {
+          await procesarPedidoGalleta(session, "paid");
+        } else {
+          await markPaymentFinal(session, "paid");
+        }
         break;
       case "checkout.session.expired":
-        await markPaymentFinal(event.data.object, "expired");
+        if (esGalletaNY) {
+          await procesarPedidoGalleta(session, "failed");
+        } else {
+          await markPaymentFinal(session, "expired");
+        }
         break;
       case "checkout.session.async_payment_failed":
-        await markPaymentFinal(event.data.object, "failed");
+        if (esGalletaNY) {
+          await procesarPedidoGalleta(session, "failed");
+        } else {
+          await markPaymentFinal(session, "failed");
+        }
         break;
       default:
         // Eventos no manejados: responder 200 para que Stripe no reintente.
@@ -131,5 +152,94 @@ router.post("/", async (req, res) => {
     res.status(500).send("Error procesando webhook");
   }
 });
+
+/**
+ * Procesa el resultado de una sesión de checkout de Galletas NY.
+ *
+ * Acciones cuando finalStatus === "paid":
+ *   1) Marca el pedido como `estadoPago: paid`, `estado: confirmado`
+ *   2) Decrementa el stock de cada sabor atómicamente ($inc -)
+ *   3) Manda email de confirmación al cliente
+ *   4) Si algún sabor queda con stock < 6, envía aviso al admin
+ *
+ * Idempotente: si el pedido ya está pagado y stockDescontado=true, no-op.
+ */
+async function procesarPedidoGalleta(session, finalStatus) {
+  const pedidoId = session?.metadata?.pedidoId;
+  if (!pedidoId) {
+    console.warn(`[webhook galleta] session ${session.id} sin pedidoId`);
+    return;
+  }
+
+  const pedido = await GalletaPedido.findById(pedidoId);
+  if (!pedido) {
+    console.warn(`[webhook galleta] Pedido no encontrado: ${pedidoId}`);
+    return;
+  }
+
+  // Idempotencia: si ya está en el estado solicitado, no-op
+  if (pedido.estadoPago === finalStatus && (finalStatus !== "paid" || pedido.stockDescontado)) {
+    return;
+  }
+
+  pedido.estadoPago = finalStatus;
+  if (session.payment_intent) {
+    pedido.stripePaymentIntentId = session.payment_intent;
+  }
+
+  if (finalStatus !== "paid") {
+    pedido.estado = "cancelado";
+    await pedido.save();
+    return;
+  }
+
+  // ── Pago confirmado: descontar stock atómicamente y notificar ──
+  pedido.estado = "confirmado";
+
+  // Agrupar piezas requeridas por slug en TODO el pedido
+  const stockNeeded = {};
+  pedido.cajas.forEach(c => c.items.forEach(it => {
+    stockNeeded[it.saborSlug] = (stockNeeded[it.saborSlug] || 0) + it.cantidad;
+  }));
+
+  const stockBajo = []; // sabores que quedaron con stock < 6
+  for (const [slug, qty] of Object.entries(stockNeeded)) {
+    // $inc atómico — si dos webhooks corrieran al mismo tiempo, no se
+    // sobrescriben el stock entre sí (cada uno aplica su propio delta).
+    const sabor = await GalletaSabor.findOneAndUpdate(
+      { slug },
+      { $inc: { stock: -qty } },
+      { new: true }
+    );
+    if (sabor && sabor.stock > 0 && sabor.stock < 6) {
+      stockBajo.push(sabor);
+    }
+    if (sabor && sabor.stock < 0) {
+      // Edge case: se vendió más de lo disponible (race en validación).
+      // Lo dejamos en 0 para no falsear inventario.
+      sabor.stock = 0;
+      await sabor.save();
+    }
+  }
+
+  pedido.stockDescontado = true;
+  await pedido.save();
+
+  // ── Email de confirmación al cliente ──
+  try {
+    await sendGalletaConfirmation(pedido);
+  } catch (e) {
+    console.error("[webhook galleta] error enviando email confirmación:", e.message);
+  }
+
+  // ── Aviso al admin si hay stock bajo ──
+  if (stockBajo.length) {
+    try {
+      await sendLowStockAlert(stockBajo);
+    } catch (e) {
+      console.error("[webhook galleta] error enviando aviso stock bajo:", e.message);
+    }
+  }
+}
 
 module.exports = router;
