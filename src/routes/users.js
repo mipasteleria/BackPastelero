@@ -54,6 +54,26 @@ router.post("/login", async (req, res) => {
       return res.status(401).send({ message: "Invalid email or password" });
     }
 
+    // Rehash on next login: si el hash actual usa más rounds que el estándar
+    // de hoy (User.BCRYPT_ROUNDS), regeneramos el hash con menos rounds en
+    // segundo plano. No esperamos — la respuesta al cliente no se bloquea.
+    // El próximo login del usuario será más rápido.
+    const currentRounds = User.getRoundsFromHash(user.password);
+    if (currentRounds != null && currentRounds > User.BCRYPT_ROUNDS) {
+      User.encryptPassword(password)
+        .then((newHash) =>
+          User.findByIdAndUpdate(user._id, { $set: { password: newHash } })
+        )
+        .then(() =>
+          console.log(
+            `[login] rehash ${user.email}: bcrypt ${currentRounds} → ${User.BCRYPT_ROUNDS}`
+          )
+        )
+        .catch((e) =>
+          console.error(`[login] error rehash ${user.email}:`, e.message)
+        );
+    }
+
     const token = await User.createToken({
       _id: user._id,
       name: user.name,
