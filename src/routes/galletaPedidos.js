@@ -9,6 +9,7 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 const { generarNumeroOrden } = require("../utils/orderNumber");
 const { resolverZona, ZONAS } = require("../utils/zonasEnvio");
 const { validarFechaHora, getSlotsValidos } = require("../utils/galletaSlots");
+const { createGalletaEvent, deleteEvent } = require("../utils/googleCalendar");
 
 const FRONT_DOMAIN = process.env.FRONT_DOMAIN;
 
@@ -346,6 +347,9 @@ router.get("/:id", checkRoleToken("admin"), async (req, res) => {
 });
 
 // ── PATCH /galletaPedidos/:id/estado — admin: cambiar estado ───────
+// Side effects sobre Google Calendar:
+//   - Si se cancela y existe evento en Calendar → se elimina
+//   - Si se confirma y NO existe evento (vino por flujo manual) → se crea
 const ESTADOS_VALIDOS = ["pendiente", "confirmado", "en_preparacion", "listo", "entregado", "cancelado"];
 router.patch("/:id/estado", checkRoleToken("admin"), async (req, res) => {
   try {
@@ -353,13 +357,42 @@ router.patch("/:id/estado", checkRoleToken("admin"), async (req, res) => {
     if (!ESTADOS_VALIDOS.includes(estado)) {
       return res.status(400).json({ message: `Estado debe ser uno de: ${ESTADOS_VALIDOS.join(", ")}` });
     }
-    const pedido = await GalletaPedido.findByIdAndUpdate(
-      req.params.id,
-      { estado },
-      { new: true }
-    );
-    if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
-    res.json({ message: "Estado actualizado", data: pedido });
+    const pedidoActual = await GalletaPedido.findById(req.params.id);
+    if (!pedidoActual) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const estadoAnterior = pedidoActual.estado;
+    pedidoActual.estado = estado;
+    await pedidoActual.save();
+
+    // ── Sincronizar Google Calendar (sin bloquear la respuesta) ──
+    // Cancelado → borrar evento si existe
+    if (estado === "cancelado" && pedidoActual.calendarEventId) {
+      deleteEvent(pedidoActual.calendarEventId)
+        .then(async () => {
+          await GalletaPedido.findByIdAndUpdate(pedidoActual._id, {
+            $set: { calendarEventId: "" },
+          });
+        })
+        .catch(e => console.error("[gcal] error en delete async:", e.message));
+    }
+    // Confirmado y aún sin evento → crearlo
+    else if (
+      ["confirmado", "en_preparacion", "listo"].includes(estado) &&
+      !pedidoActual.calendarEventId &&
+      pedidoActual.estadoPago === "paid"
+    ) {
+      createGalletaEvent(pedidoActual)
+        .then(async (eventId) => {
+          if (eventId) {
+            await GalletaPedido.findByIdAndUpdate(pedidoActual._id, {
+              $set: { calendarEventId: eventId },
+            });
+          }
+        })
+        .catch(e => console.error("[gcal] error en create async:", e.message));
+    }
+
+    res.json({ message: "Estado actualizado", data: pedidoActual });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -10,6 +10,7 @@ const Snack = require("../../models/snackCotiza");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
 const { sendGalletaConfirmation, sendLowStockAlert } = require("./galletaEmails");
+const { createGalletaEvent } = require("../../utils/googleCalendar");
 
 /**
  * POST /webhook/stripe
@@ -230,6 +231,19 @@ async function procesarPedidoGalleta(session, finalStatus) {
     await sendGalletaConfirmation(pedido);
   } catch (e) {
     console.error("[webhook galleta] error enviando email confirmación:", e.message);
+  }
+
+  // ── Crear evento en Google Calendar de la pastelería ──
+  // No bloquea el webhook si falla; el evento se puede agregar manual desde
+  // el detalle del pedido en el dashboard si fuera necesario.
+  try {
+    const eventId = await createGalletaEvent(pedido);
+    if (eventId) {
+      pedido.calendarEventId = eventId;
+      await pedido.save();
+    }
+  } catch (e) {
+    console.error("[webhook galleta] error creando evento en Calendar:", e.message);
   }
 
   // ── Aviso al admin si hay stock bajo ──
