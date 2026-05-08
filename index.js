@@ -185,61 +185,41 @@ function buildSafeFileName(file) {
   return `${Date.now()}-${rand}-${base}${ext}`;
 }
 
-async function uploadFileToGCS(file, bucketName) {
+/**
+ * Sube un archivo a GCS y devuelve la URL para servirlo.
+ *
+ * IMPORTANTE: NO devolvemos la URL directa de GCS porque el bucket
+ * `bucketpasteleria` está en modo Uniform IAM y no es público. En su
+ * lugar devolvemos una URL que apunta al endpoint /file/:filename de
+ * este mismo backend, que actúa como proxy autenticado vía service
+ * account.
+ *
+ * Ventaja: la URL nunca expira y funciona aún con buckets privados.
+ * Costo: cada request de imagen pasa por un function de Vercel (~ms).
+ */
+async function uploadFileToGCS(file, bucketName, req) {
   const bucket = storage.bucket(bucketName);
   const safeName = buildSafeFileName(file);
   const blob = bucket.file(safeName);
   const blobStream = blob.createWriteStream({
     resumable: false,
     gzip: true,
-    // Cache agresivo: las imágenes son inmutables (nombre incluye timestamp+random),
-    // así que se pueden cachear por un año sin riesgo de servir contenido viejo.
     metadata: {
       contentType: file.mimetype,
       cacheControl: "public, max-age=31536000, immutable",
     },
-    // Hacer el objeto públicamente legible. Sin esto, GCS responde 401 al
-    // navegador y la imagen aparece rota. Solo funciona si el bucket está
-    // en modo "Fine-grained access control" (no Uniform bucket-level access).
-    predefinedAcl: "publicRead",
   });
 
   return new Promise((resolve, reject) => {
-    blobStream.on("error", async (err) => {
-      // Fallback: si el bucket está en modo Uniform, predefinedAcl falla con
-      // 400 "Cannot use predefinedAcl …". Reintentamos sin esa opción y
-      // dejamos al usuario el aviso de que debe configurar el bucket público.
-      if (err && /predefinedAcl/i.test(err.message || "")) {
-        try {
-          const blob2 = bucket.file(safeName);
-          const stream2 = blob2.createWriteStream({
-            resumable: false,
-            gzip: true,
-            metadata: {
-              contentType: file.mimetype,
-              cacheControl: "public, max-age=31536000, immutable",
-            },
-          });
-          stream2.on("error", reject);
-          stream2.on("finish", () => {
-            const publicUrl = `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(safeName)}`;
-            console.warn(
-              "[upload] subido sin predefinedAcl — el bucket usa Uniform IAM. " +
-              "Asegúrate de tener allUsers:objectViewer en IAM o las imágenes no cargarán."
-            );
-            resolve({ message: "File uploaded (uniform IAM)", fileUrl: publicUrl, fileName: safeName });
-          });
-          stream2.end(file.buffer);
-        } catch (e2) {
-          reject(e2);
-        }
-        return;
-      }
-      reject(err);
-    });
+    blobStream.on("error", reject);
     blobStream.on("finish", () => {
-      const publicUrl = `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(safeName)}`;
-      resolve({ message: "File uploaded successfully", fileUrl: publicUrl, fileName: safeName });
+      // URL de nuestro proxy — funciona independientemente del modo IAM
+      // del bucket. Si en el futuro hacen el bucket público pueden cambiar
+      // este URL al patrón directo de GCS sin migrar datos.
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host;
+      const fileUrl = `${protocol}://${host}/file/${encodeURIComponent(safeName)}`;
+      resolve({ message: "File uploaded successfully", fileUrl, fileName: safeName });
     });
     blobStream.end(file.buffer);
   });
@@ -257,7 +237,7 @@ app.post("/upload", requireAuth, (req, res, next) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: "No files received" });
     }
-    Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName)))
+    Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName, req)))
       .then((results) => res.status(200).json(results))
       .catch((e) => {
         console.error("Error uploading files:", e.message, e.code ?? "");
@@ -266,7 +246,48 @@ app.post("/upload", requireAuth, (req, res, next) => {
   });
 });
 
-// Ver imagen
+/**
+ * GET /file/:filename — sirve archivos desde GCS como proxy.
+ *
+ * Funciona aún con buckets en modo Uniform IAM no-públicos: el backend
+ * usa el service account (que sí tiene permiso de lectura) para leer
+ * el archivo y lo retransmite al cliente con headers de cache agresivos.
+ *
+ * Validación: solo permite nombres de archivo seguros (los que genera
+ * buildSafeFileName). Esto bloquea path traversal y consultas a archivos
+ * que no se subieron por nuestra app.
+ */
+app.get("/file/:filename", async (req, res) => {
+  if (!storage) return res.status(503).json({ error: "GCS not configured" });
+  try {
+    const { filename } = req.params;
+    // Solo letras, números, punto, guión y guión-bajo. NO permite '/' ni '..'.
+    if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+      return res.status(400).json({ error: "Nombre de archivo inválido" });
+    }
+
+    const file = storage.bucket(bucketName).file(filename);
+    const [exists] = await file.exists();
+    if (!exists) return res.status(404).json({ error: "Archivo no encontrado" });
+
+    const [metadata] = await file.getMetadata();
+    res.setHeader("Content-Type", metadata.contentType || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    if (metadata.size) res.setHeader("Content-Length", metadata.size);
+
+    file.createReadStream()
+      .on("error", (e) => {
+        console.error("[/file] stream error:", e.message);
+        if (!res.headersSent) res.status(500).json({ error: "Error sirviendo archivo" });
+      })
+      .pipe(res);
+  } catch (e) {
+    console.error("[/file] error:", e.message);
+    if (!res.headersSent) res.status(500).json({ error: e.message });
+  }
+});
+
+// Ver imagen (legacy — devuelve signed URL)
 app.get("/image-url/:filename", async (req, res) => {
   try {
     const fileName = req.params.filename;
