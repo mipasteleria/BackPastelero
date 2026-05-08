@@ -144,7 +144,9 @@ router.post("/checkout", async (req, res) => {
         stockNeeded[s.slug] = (stockNeeded[s.slug] || 0) + cant;
       }
 
-      const descuento = caja.tamano === "12" ? 30 : 0;
+      // Sin descuentos automáticos — se reserva el campo para futuros
+      // códigos promocionales aplicados por el admin.
+      const descuento = 0;
       cajasNormalizadas.push({
         tamano:    caja.tamano,
         items:     itemsNorm,

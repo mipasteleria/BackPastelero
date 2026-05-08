@@ -51,7 +51,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
     const sabor = await GalletaSabor.create({
       slug:        String(slug).toLowerCase().trim(),
       nombre,
-      descripcion: descripcion || "Chocolate belga",
+      descripcion: descripcion || "",
       precio:      Number(precio),
       stock:       Number(stock) || 0,
       imagen:      imagen || "",

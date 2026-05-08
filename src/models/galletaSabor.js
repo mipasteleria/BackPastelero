@@ -26,7 +26,7 @@ const galletaSaborSchema = new mongoose.Schema(
       match: [/^[a-z0-9-]+$/, "Slug solo permite minúsculas, números y guiones"],
     },
     nombre:      { type: String, required: true, trim: true },
-    descripcion: { type: String, trim: true, default: "Chocolate belga" },
+    descripcion: { type: String, trim: true, default: "" },
 
     precio: {
       type: Number,

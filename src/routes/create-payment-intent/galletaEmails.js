@@ -43,7 +43,7 @@ function renderCajas(cajas) {
         .map(it => `<li style="color:#540027;line-height:1.6;">${it.cantidad}× ${it.saborNombre} <span style="color:#a78891;">($${it.precioUnitario} c/u)</span></li>`)
         .join("");
       const desc = caja.descuento > 0
-        ? `<p style="margin:4px 0 0;color:#1D5A45;font-size:0.85rem;">Descuento docena: −$${caja.descuento}</p>`
+        ? `<p style="margin:4px 0 0;color:#1D5A45;font-size:0.85rem;">Descuento: −$${caja.descuento}</p>`
         : "";
       return `
         <div style="background:#fff1f2;border-radius:10px;padding:14px 16px;margin-bottom:10px;">
