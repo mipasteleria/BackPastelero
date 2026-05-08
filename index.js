@@ -274,17 +274,27 @@ app.post("/upload", requireAuth, (req, res, next) => {
  * que no se subieron por nuestra app.
  */
 app.get("/file/:filename", async (req, res) => {
-  if (!storage) return res.status(503).json({ error: "GCS not configured" });
+  // Helper: setear no-cache en respuestas de error para evitar que
+  // navegadores/CDN cacheen 403/404/500 transitorios (p.ej. durante un
+  // deploy). El navegador podría memorizar el error por mucho tiempo si
+  // por suerte le tocó una respuesta cacheable.
+  const sendError = (status, msg) => {
+    if (!res.headersSent) {
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+      res.status(status).json({ error: msg });
+    }
+  };
+
+  if (!storage) return sendError(503, "GCS not configured");
   try {
     const { filename } = req.params;
-    // Solo letras, números, punto, guión y guión-bajo. NO permite '/' ni '..'.
     if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
-      return res.status(400).json({ error: "Nombre de archivo inválido" });
+      return sendError(400, "Nombre de archivo inválido");
     }
 
     const file = storage.bucket(bucketName).file(filename);
     const [exists] = await file.exists();
-    if (!exists) return res.status(404).json({ error: "Archivo no encontrado" });
+    if (!exists) return sendError(404, "Archivo no encontrado");
 
     const [metadata] = await file.getMetadata();
     res.setHeader("Content-Type", metadata.contentType || "application/octet-stream");
@@ -294,12 +304,12 @@ app.get("/file/:filename", async (req, res) => {
     file.createReadStream()
       .on("error", (e) => {
         console.error("[/file] stream error:", e.message);
-        if (!res.headersSent) res.status(500).json({ error: "Error sirviendo archivo" });
+        sendError(500, "Error sirviendo archivo");
       })
       .pipe(res);
   } catch (e) {
     console.error("[/file] error:", e.message);
-    if (!res.headersSent) res.status(500).json({ error: e.message });
+    sendError(500, e.message);
   }
 });
 
