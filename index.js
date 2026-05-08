@@ -51,6 +51,22 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Esperar a que MongoDB esté conectado antes de procesar requests.
+// Sin esto, en Vercel un cold-start puede dejar la query en buffer hasta
+// que excede los 10s del timeout de la función → 504. Mejor await la
+// conexión (fail-fast a 8s, ver db.js) y devolver 503 claro si falla.
+// /health se exime para que healthchecks no se bloqueen por DB.
+app.use(async (req, res, next) => {
+  if (req.path === "/health") return next();
+  try {
+    await mongoDB.ensureConnection();
+    next();
+  } catch (e) {
+    console.error("[db middleware] connection failed:", e.message);
+    res.status(503).json({ message: "Servicio temporalmente no disponible" });
+  }
+});
+
 // IMPORTANTE: el webhook de Stripe debe recibir el body CRUDO para que la
 // verificación de firma HMAC funcione. Se monta con express.raw ANTES de
 // express.json(), que de lo contrario transformaría el buffer y rompería
