@@ -192,11 +192,51 @@ async function uploadFileToGCS(file, bucketName) {
   const blobStream = blob.createWriteStream({
     resumable: false,
     gzip: true,
-    metadata: { contentType: file.mimetype },
+    // Cache agresivo: las imágenes son inmutables (nombre incluye timestamp+random),
+    // así que se pueden cachear por un año sin riesgo de servir contenido viejo.
+    metadata: {
+      contentType: file.mimetype,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
+    // Hacer el objeto públicamente legible. Sin esto, GCS responde 401 al
+    // navegador y la imagen aparece rota. Solo funciona si el bucket está
+    // en modo "Fine-grained access control" (no Uniform bucket-level access).
+    predefinedAcl: "publicRead",
   });
 
   return new Promise((resolve, reject) => {
-    blobStream.on("error", (err) => reject(err));
+    blobStream.on("error", async (err) => {
+      // Fallback: si el bucket está en modo Uniform, predefinedAcl falla con
+      // 400 "Cannot use predefinedAcl …". Reintentamos sin esa opción y
+      // dejamos al usuario el aviso de que debe configurar el bucket público.
+      if (err && /predefinedAcl/i.test(err.message || "")) {
+        try {
+          const blob2 = bucket.file(safeName);
+          const stream2 = blob2.createWriteStream({
+            resumable: false,
+            gzip: true,
+            metadata: {
+              contentType: file.mimetype,
+              cacheControl: "public, max-age=31536000, immutable",
+            },
+          });
+          stream2.on("error", reject);
+          stream2.on("finish", () => {
+            const publicUrl = `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(safeName)}`;
+            console.warn(
+              "[upload] subido sin predefinedAcl — el bucket usa Uniform IAM. " +
+              "Asegúrate de tener allUsers:objectViewer en IAM o las imágenes no cargarán."
+            );
+            resolve({ message: "File uploaded (uniform IAM)", fileUrl: publicUrl, fileName: safeName });
+          });
+          stream2.end(file.buffer);
+        } catch (e2) {
+          reject(e2);
+        }
+        return;
+      }
+      reject(err);
+    });
     blobStream.on("finish", () => {
       const publicUrl = `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(safeName)}`;
       resolve({ message: "File uploaded successfully", fileUrl: publicUrl, fileName: safeName });
