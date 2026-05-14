@@ -9,7 +9,7 @@ const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
-const { sendGalletaConfirmation, sendLowStockAlert } = require("./galletaEmails");
+const { sendGalletaConfirmation, sendGalletaConfirmationToAdmin, sendLowStockAlert } = require("./galletaEmails");
 const { createGalletaEvent } = require("../../utils/googleCalendar");
 
 /**
@@ -231,6 +231,13 @@ async function procesarPedidoGalleta(session, finalStatus) {
     await sendGalletaConfirmation(pedido);
   } catch (e) {
     console.error("[webhook galleta] error enviando email confirmación:", e.message);
+  }
+
+  // ── Email de aviso al admin (no bloquea si falla) ──
+  try {
+    await sendGalletaConfirmationToAdmin(pedido);
+  } catch (e) {
+    console.error("[webhook galleta] error enviando aviso al admin:", e.message);
   }
 
   // ── Crear evento en Google Calendar de la pastelería ──
