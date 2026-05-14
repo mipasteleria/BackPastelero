@@ -146,6 +146,101 @@ async function sendGalletaConfirmation(pedido) {
 }
 
 /**
+ * Email al admin cuando se confirma un pedido nuevo.
+ * Destinatario: ADMIN_EMAIL en .env, o EMAIL_USER por defecto.
+ */
+async function sendGalletaConfirmationToAdmin(pedido) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_USER;
+  const transporter = buildTransporter();
+
+  const fechaTxt = formatearFechaLarga(pedido.fechaEntrega);
+  const esEnvio = pedido.tipoEntrega === "envio";
+
+  const dashboardLink = process.env.FRONT_DOMAIN
+    ? `${process.env.FRONT_DOMAIN.replace(/\/$/, "")}/dashboard/pedidos-galletas/${pedido._id}`
+    : null;
+
+  const bloqueEntrega = esEnvio
+    ? `
+        <p style="margin:0 0 4px;color:#a78891;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">🚚 Envío a domicilio</p>
+        <p style="margin:0;color:#540027;line-height:1.6;">${pedido.direccionEnvio.calleNumero}</p>
+        <p style="margin:0;color:#540027;line-height:1.6;">Col. ${pedido.direccionEnvio.colonia}, ${pedido.direccionEnvio.municipio}</p>
+        ${pedido.direccionEnvio.referencias ? `<p style="margin:0;color:#a78891;font-size:0.85rem;">Ref: ${pedido.direccionEnvio.referencias}</p>` : ""}
+        <p style="margin:6px 0 0;font-weight:700;color:#540027;font-size:1.05rem;">${fechaTxt} · ${pedido.horaEntrega} hrs</p>
+      `
+    : `
+        <p style="margin:0 0 4px;color:#a78891;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">🏪 Recogida en sucursal</p>
+        <p style="margin:6px 0 0;font-weight:700;color:#540027;font-size:1.05rem;">${fechaTxt} · ${pedido.horaEntrega} hrs</p>
+      `;
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border:1px solid #ffe2e7;border-radius:14px;overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#540027,#7A1F44);padding:24px;text-align:center;">
+        <p style="margin:0 0 4px;color:#FFC3C9;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.16em;">🍪 Galletas NY · Nuevo pedido</p>
+        <h1 style="margin:0;color:#fff;font-size:1.6rem;">Pedido confirmado · $${pedido.total}</h1>
+      </div>
+
+      <div style="padding:24px;">
+        <div style="background:#fff1f2;border-left:4px solid #FF6F7D;border-radius:8px;padding:14px 16px;margin-bottom:18px;">
+          <p style="margin:0;color:#a78891;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;">Número de orden</p>
+          <p style="margin:4px 0 0;font-size:1.4rem;font-weight:800;color:#540027;font-family:'Courier New',monospace;letter-spacing:0.04em;">${pedido.numeroOrden}</p>
+        </div>
+
+        <h3 style="color:#540027;font-size:1rem;margin:0 0 10px;">Cliente</h3>
+        <div style="background:#fff;border:1px solid #ffe2e7;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+          <p style="margin:0 0 4px;color:#540027;font-weight:700;font-size:1.05rem;">${pedido.cliente.nombre}</p>
+          <p style="margin:0;color:#540027;line-height:1.7;font-size:0.9rem;">
+            📞 <a href="tel:${pedido.cliente.telefono}" style="color:#540027;text-decoration:none;">${pedido.cliente.telefono}</a>
+          </p>
+          <p style="margin:0;color:#540027;line-height:1.7;font-size:0.9rem;">
+            ✉️ <a href="mailto:${pedido.cliente.email}" style="color:#540027;text-decoration:none;">${pedido.cliente.email}</a>
+          </p>
+        </div>
+
+        <h3 style="color:#540027;font-size:1rem;margin:0 0 10px;">Detalle del pedido</h3>
+        ${renderCajas(pedido.cajas)}
+
+        <table style="width:100%;border-collapse:collapse;margin-top:14px;">
+          <tr><td style="padding:4px 0;color:#a78891;">Subtotal galletas</td><td style="padding:4px 0;text-align:right;color:#540027;font-weight:600;">$${pedido.subtotalProductos}</td></tr>
+          ${pedido.costoEnvio > 0 ? `<tr><td style="padding:4px 0;color:#a78891;">Envío</td><td style="padding:4px 0;text-align:right;color:#540027;font-weight:600;">$${pedido.costoEnvio}</td></tr>` : ""}
+          <tr><td style="padding:8px 0;border-top:2px solid #ffe2e7;color:#540027;font-weight:800;">Total cobrado</td><td style="padding:8px 0;border-top:2px solid #ffe2e7;text-align:right;color:#540027;font-weight:800;font-size:1.15rem;">$${pedido.total}</td></tr>
+        </table>
+
+        <h3 style="color:#540027;font-size:1rem;margin:24px 0 10px;">Entrega</h3>
+        <div style="background:#fff;border:1px solid #ffe2e7;border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+          ${bloqueEntrega}
+        </div>
+
+        ${pedido.notas ? `<div style="background:#FFE99B;border-radius:8px;padding:10px 14px;margin-bottom:18px;"><p style="margin:0;color:#6B4F1A;font-size:0.85rem;"><strong>Nota del cliente:</strong> ${pedido.notas}</p></div>` : ""}
+
+        ${dashboardLink ? `
+          <div style="text-align:center;margin:24px 0 8px;">
+            <a href="${dashboardLink}" style="display:inline-block;padding:12px 26px;background:#540027;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.9rem;">
+              Ver pedido en el dashboard →
+            </a>
+          </div>
+        ` : ""}
+
+        <p style="margin:18px 0 0;color:#a78891;font-size:0.78rem;text-align:center;line-height:1.6;">
+          Notificación automática · Pastelería El Ruiseñor
+        </p>
+      </div>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: `"Pastelería El Ruiseñor" <${process.env.EMAIL_USER}>`,
+    to: adminEmail,
+    subject: `🍪 Nuevo pedido NY · ${pedido.numeroOrden} · $${pedido.total}`,
+    html,
+  });
+
+  console.log(`[galletaEmails] aviso admin enviado a ${adminEmail} (${pedido.numeroOrden})`);
+}
+
+/**
  * Aviso interno al admin cuando uno o más sabores quedan en stock bajo (< 6).
  * El destinatario es ADMIN_EMAIL en .env, o EMAIL_USER por defecto.
  */
@@ -183,5 +278,6 @@ async function sendLowStockAlert(saboresBajos) {
 
 module.exports = {
   sendGalletaConfirmation,
+  sendGalletaConfirmationToAdmin,
   sendLowStockAlert,
 };
