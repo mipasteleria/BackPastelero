@@ -78,16 +78,28 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Actualizar (o crear si no existe) el único documento de costos — solo admin
+// Actualizar (o crear si no existe) el único documento de costos — solo admin.
+// `fixedCosts` y `laborCosts` siguen siendo requeridos (compat con el form
+// existente de gastosfijosymanodeobra). Los 3 campos de galletas
+// (`costoBrandingPorGalleta`, `markupGalletasPct`, `margenMinimoGalleta`)
+// son opcionales — solo se actualizan si vienen en el body. Esto permite
+// que el front mande payloads parciales sin pisar valores existentes.
 router.put('/', checkRoleToken('admin'), async (req, res) => {
   try {
-    const { fixedCosts, laborCosts } = req.body;
+    const {
+      fixedCosts, laborCosts,
+      costoBrandingPorGalleta, markupGalletasPct, margenMinimoGalleta,
+    } = req.body;
     if (fixedCosts === undefined || laborCosts === undefined) {
       return res.status(400).json({ message: "Parámetros 'fixedCosts' y 'laborCosts' son requeridos" });
     }
+    const update = { fixedCosts, laborCosts };
+    if (costoBrandingPorGalleta !== undefined) update.costoBrandingPorGalleta = costoBrandingPorGalleta;
+    if (markupGalletasPct       !== undefined) update.markupGalletasPct       = markupGalletasPct;
+    if (margenMinimoGalleta     !== undefined) update.margenMinimoGalleta     = margenMinimoGalleta;
     const cost = await Cost.findOneAndUpdate(
       {},
-      { fixedCosts, laborCosts },
+      update,
       { upsert: true, new: true }
     );
     res.json(cost);
