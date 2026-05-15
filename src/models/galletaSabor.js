@@ -55,6 +55,25 @@ const galletaSaborSchema = new mongoose.Schema(
     activo:      { type: Boolean, default: true },   // Soft-delete: false oculta del catálogo
 
     orden: { type: Number, default: 0 },              // Para ordenar en el frontend
+
+    // ── Costeo desde receta (opcional, retrocompatible) ──────────
+    // Si `recetaId` está presente, el sabor "hereda" su costo unitario
+    // del cálculo de la receta. El `costoUnitarioSnapshot` se congela
+    // al crear o al usar `POST /galletas-ny/sabores/:id/recostear` —
+    // así el precio mostrado al cliente no cambia si suben los insumos,
+    // pero el sistema vigila el costo "live" y avisa cuando el margen
+    // (precio − costoLive) cae por debajo de `Cost.margenMinimoGalleta`.
+    recetaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Receta",
+      default: null,
+    },
+    costoUnitarioSnapshot: {
+      type: Number,
+      default: null,
+      min: 0,
+    },
+    fechaCosteoSnapshot: { type: Date, default: null },
   },
   { timestamps: true }
 );
