@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const { google } = require("googleapis");
 const checkRoleToken = require("../middlewares/myRoleToken");
+const GalletaPedido = require("../models/galletaPedido");
+const { createGalletaEvent } = require("../utils/googleCalendar");
 
 /**
  * Endpoints de diagnóstico para Google Calendar.
@@ -144,6 +146,82 @@ router.get("/calendar-status", checkRoleToken("admin"), async (req, res) => {
   }
 
   res.json({ ok: true, results, summary: "Calendar configurado correctamente. Los próximos pedidos crearán eventos." });
+});
+
+/**
+ * Diagnóstico de un pedido específico de Galletas NY:
+ * - Muestra los campos relevantes que decide el hook de Calendar
+ *   (estado, estadoPago, calendarEventId, fechaEntrega, horaEntrega).
+ * - Reporta si las CONDICIONES están cumplidas para que el hook
+ *   cree evento.
+ * - Si pasas ?force=true, ejecuta createGalletaEvent SIN evaluar
+ *   condiciones — útil para confirmar que la función misma funciona
+ *   con los datos de este pedido, y para recuperar un pedido
+ *   cuyo evento se perdió.
+ */
+router.get("/pedido-calendar-debug/:id", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const pedido = await GalletaPedido.findById(req.params.id);
+    if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const estadoTriggerStates = ["confirmado", "en_preparacion", "listo"];
+    const conditionEstado    = estadoTriggerStates.includes(pedido.estado);
+    const conditionSinEvento = !pedido.calendarEventId;
+    const conditionPagado    = pedido.estadoPago === "paid";
+    const conditionsMet      = conditionEstado && conditionSinEvento && conditionPagado;
+
+    const checks = {
+      "estado in [confirmado, en_preparacion, listo]": conditionEstado,
+      "calendarEventId vacío": conditionSinEvento,
+      "estadoPago === paid": conditionPagado,
+    };
+
+    const snapshot = {
+      _id: pedido._id,
+      numeroOrden: pedido.numeroOrden,
+      estado: pedido.estado,
+      estadoPago: pedido.estadoPago,
+      calendarEventId: pedido.calendarEventId || "(empty)",
+      fechaEntrega: pedido.fechaEntrega,
+      horaEntrega: pedido.horaEntrega,
+      tipoEntrega: pedido.tipoEntrega,
+      cliente: pedido.cliente,
+    };
+
+    if (req.query.force !== "true") {
+      return res.json({
+        pedido: snapshot,
+        checks,
+        conditionsMet,
+        hint: conditionsMet
+          ? "Las condiciones SÍ se cumplen. Si aún así no se crea el evento, pasa ?force=true para forzar."
+          : "Las condiciones NO se cumplen — por eso el hook no dispara. Arregla los `false` arriba antes de cambiar estado.",
+      });
+    }
+
+    // Force mode: crear evento ignorando condiciones
+    const eventId = await createGalletaEvent(pedido);
+    if (eventId) {
+      pedido.calendarEventId = eventId;
+      await pedido.save();
+      return res.json({
+        pedido: snapshot,
+        checks,
+        forced: true,
+        eventId,
+        message: "Evento creado forzadamente y guardado en el pedido.",
+      });
+    }
+    return res.json({
+      pedido: snapshot,
+      checks,
+      forced: true,
+      eventId: null,
+      message: "createGalletaEvent retornó null — revisa logs del back (probablemente fechaEntrega/horaEntrega inválidos o Calendar API arrojó error).",
+    });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
 });
 
 module.exports = router;
