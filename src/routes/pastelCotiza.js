@@ -5,6 +5,11 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { calcularCosteo } = require("../jobs/costeoHandler");
 const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
+const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
+
+// Notas internas de admin (POST + DELETE en /:id/notas-internas/*).
+// El front-end del cliente NUNCA debe leer este campo.
+mountNotaInternaRoutes(router, Prices, "Cotización Pastel");
 
 //Enviar Cotización Cake
 router.post("/", async (req, res) => {
@@ -19,22 +24,26 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Recuperar Datos Cotización Cake — admin ve todo, user solo sus propias
+//Recuperar Datos Cotización Cake — admin ve todo, user solo sus propias.
+// `notasInternas` se excluye para non-admin (son info privada del admin).
 router.get("/", requireAuth, async (req, res) => {
   try {
     const filter = req.user.role === "admin" ? {} : { userId: String(req.user._id) };
-    const pricesData = await Prices.find(filter);
+    const projection = req.user.role === "admin" ? "" : "-notasInternas";
+    const pricesData = await Prices.find(filter).select(projection);
     res.send({ message: "All Prices Cake", data: pricesData, total: pricesData.length });
   } catch (error) {
     res.status(400).send({ message: error });
   }
 });
 
-//Obtener Cotizaciones por ID Cake
+//Obtener Cotizaciones por ID Cake — endpoint público.
+// SIEMPRE excluye notasInternas (info admin-only). Si más adelante se
+// agrega auth aquí, considerar devolverlas cuando role === "admin".
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const pricesid = await Prices.findById({ _id: id });
+    const pricesid = await Prices.findById({ _id: id }).select("-notasInternas");
     res.send({ message: "Price Cake by ID", data: pricesid });
   } catch (error) {
     res.status(400).send({ message: error });

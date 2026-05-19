@@ -113,6 +113,10 @@ const snacksSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    notasInternas: {
+      type: [require("./notaInternaSchema")],
+      default: [],
+    },
   },
   {
     timestamps: true,
