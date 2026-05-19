@@ -201,6 +201,154 @@ async function createGalletaEvent(pedido) {
 }
 
 /**
+ * Parsea el `deliveryDate` que viene de cotizaciones (pastel/cupcake/snack)
+ * con formato "DD/MM/YYYY HH:MM" → { fechaISO: "YYYY-MM-DD", hora: "HH:MM" }.
+ *
+ * Si el string viene en otro formato (ej. solo fecha sin hora) intentamos
+ * un fallback razonable; si nada matchea retorna null para que la lógica
+ * superior decida no crear el evento.
+ */
+function parseDeliveryDateStr(s) {
+  if (typeof s !== "string" || !s.trim()) return null;
+  // Match "DD/MM/YYYY HH:MM" o "DD/MM/YYYY HH:MM:SS"
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (m) {
+    const [, dd, mm, yyyy, hh, min] = m;
+    return {
+      fechaISO: `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`,
+      hora: `${hh.padStart(2, "0")}:${min}`,
+    };
+  }
+  // Fallback: solo fecha "DD/MM/YYYY" → asumimos 12:00
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const [, dd, mm, yyyy] = m;
+    return {
+      fechaISO: `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`,
+      hora: "12:00",
+    };
+  }
+  // Fallback: "YYYY-MM-DD HH:MM"
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}):(\d{2})/);
+  if (m) {
+    const [, yyyy, mm, dd, hh, min] = m;
+    return {
+      fechaISO: `${yyyy}-${mm}-${dd}`,
+      hora: `${hh.padStart(2, "0")}:${min}`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Crea un evento en Google Calendar para una cotización (pastel/cupcake/snack).
+ *
+ * @param {object} cotizacion  El documento de cotización con todos sus campos
+ * @param {string} tipo        "Pastel" | "Cupcake" | "Snack"
+ *
+ * Retorna el ID del evento creado, o null si Calendar no está configurado
+ * o si la cotización no tiene `deliveryDate` parseable.
+ */
+async function createCotizacionEvent(cotizacion, tipo) {
+  const calendar = getCalendarClient();
+  if (!calendar) return null;
+
+  // Sin deliveryDate parseable no podemos agendar. No falla, solo
+  // logueamos y devolvemos null.
+  const parsed = parseDeliveryDateStr(cotizacion.deliveryDate);
+  if (!parsed) {
+    console.warn(`[gcal] cotización ${cotizacion._id} sin deliveryDate válido — no se crea evento`);
+    return null;
+  }
+
+  try {
+    const emoji = tipo === "Pastel" ? "🎂" : tipo === "Cupcake" ? "🧁" : "🍫";
+    const tipoLower = (tipo || "Pedido").toLowerCase();
+    const cantidad = cotizacion.portions ? `${cotizacion.portions} porc` : null;
+    const flavor = cotizacion.flavor || "";
+
+    // Title: "🎂 Pastel · 30 porc · Vainilla · {contactName}"
+    const summary = [
+      `${emoji} ${tipo || "Pedido"}`,
+      cantidad,
+      flavor,
+      cotizacion.contactName,
+    ].filter(Boolean).join(" · ");
+
+    const esEnvio = !!(cotizacion.deliveryAdress && String(cotizacion.deliveryAdress).trim());
+
+    const detalles = [
+      `Tipo: ${tipo || "—"}`,
+      flavor ? `Sabor: ${flavor}` : null,
+      cotizacion.stuffedFlavor ? `Relleno: ${cotizacion.stuffedFlavor}` : null,
+      cotizacion.cover ? `Cobertura: ${cotizacion.cover}` : null,
+      cotizacion.levels ? `Pisos: ${cotizacion.levels}` : null,
+      cotizacion.portions ? `Porciones: ${cotizacion.portions}` : null,
+    ].filter(Boolean).join("\n");
+
+    const description = [
+      `Cliente: ${cotizacion.contactName || "—"}`,
+      `Teléfono: ${cotizacion.contactPhone || "—"}`,
+      ``,
+      esEnvio ? `🚗 Envío a domicilio` : `🏪 Recogida en sucursal`,
+      ``,
+      detalles,
+      ``,
+      cotizacion.precio != null ? `Precio total: $${cotizacion.precio}` : null,
+      cotizacion.anticipo != null ? `Anticipo: $${cotizacion.anticipo}` : null,
+      cotizacion.saldoPendiente != null ? `Saldo pendiente: $${cotizacion.saldoPendiente}` : null,
+      cotizacion.status ? `Estado: ${cotizacion.status}` : null,
+      ``,
+      cotizacion.questionsOrComments ? `Notas del cliente: ${cotizacion.questionsOrComments}` : null,
+    ].filter(Boolean).join("\n");
+
+    let location = "Calle Bogotá 2866a, Col. Providencia, Guadalajara, Jal.";
+    if (esEnvio) location = cotizacion.deliveryAdress;
+
+    // Tiempo: 60 min de duración por defecto (los pasteles suelen requerir
+    // más coordinación que las galletas).
+    const startISO = combinarFechaHora(parsed.fechaISO, parsed.hora);
+    const endISO   = sumarMinutos(startISO, 60);
+
+    const event = {
+      summary,
+      description,
+      location,
+      start: { dateTime: startISO, timeZone: TIMEZONE },
+      end:   { dateTime: endISO,   timeZone: TIMEZONE },
+      // Color distinto del de Galletas NY (4=Flamingo, 11=Rojo) para
+      // distinguir visualmente. 9 = Blueberry (azul) para cotizaciones
+      // de recogida; 6 = Tangerine (naranja) para envíos.
+      colorId: esEnvio ? "6" : "9",
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: "popup", minutes: 24 * 60 },
+          { method: "popup", minutes: 60 },
+        ],
+      },
+      extendedProperties: {
+        private: {
+          cotizacionId: String(cotizacion._id),
+          tipoProducto: tipoLower,
+        },
+      },
+    };
+
+    const res = await calendar.events.insert({
+      calendarId: getCalendarId(),
+      requestBody: event,
+    });
+
+    console.log(`[gcal] evento de cotización creado (${tipo} ${cotizacion._id}): ${res.data.id}`);
+    return res.data.id;
+  } catch (e) {
+    console.error(`[gcal] error creando evento de cotización ${cotizacion._id}:`, e.message);
+    return null;
+  }
+}
+
+/**
  * Elimina un evento por su ID. Útil al cancelar un pedido.
  * No falla si el evento ya no existe.
  */
@@ -226,5 +374,7 @@ async function deleteEvent(eventId) {
 module.exports = {
   getCalendarClient,
   createGalletaEvent,
+  createCotizacionEvent,
+  parseDeliveryDateStr,
   deleteEvent,
 };

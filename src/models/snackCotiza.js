@@ -108,6 +108,11 @@ const snacksSchema = new mongoose.Schema(
       type: costeoSnapshotSchema,
       default: null,
     },
+    // ID del evento de Google Calendar (mismo patrón que pastelCotiza).
+    calendarEventId: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,
