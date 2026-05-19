@@ -4,6 +4,7 @@ const Prices = require("../models/cupcakesCotiza");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { calcularCosteo } = require("../jobs/costeoHandler");
+const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
 
 //Enviar Cotización Cupcake
 router.post("/", async (req, res) => {
@@ -48,6 +49,8 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     const newPrices = await Prices.findByIdAndUpdate(id, newPrice, {
       returnOriginal: false,
     });
+    // Sincronizar Google Calendar (no bloquea).
+    syncCotizacionCalendar(Prices, newPrices, "Cupcake");
     res.send({ message: "Price updated", data: newPrices });
   } catch (error) {
     res.status(400).send({ message: error });

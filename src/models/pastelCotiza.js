@@ -117,6 +117,14 @@ const pastelSchema = new mongoose.Schema(
       type: costeoSnapshotSchema,
       default: null,
     },
+    // ID del evento creado en Google Calendar cuando la cotización pasa a
+    // estado "Agendado...". Se usa para borrar el evento si después se
+    // cancela. Empty string = sin evento (más friendly que null para
+    // comparaciones en el código).
+    calendarEventId: {
+      type: String,
+      default: "",
+    },
   },
   {
     timestamps: true,

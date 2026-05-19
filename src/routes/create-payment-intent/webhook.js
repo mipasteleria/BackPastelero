@@ -10,7 +10,7 @@ const Snack = require("../../models/snackCotiza");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
 const { sendGalletaConfirmation, sendGalletaConfirmationToAdmin, sendLowStockAlert } = require("./galletaEmails");
-const { createGalletaEvent } = require("../../utils/googleCalendar");
+const { createGalletaEvent, createCotizacionEvent } = require("../../utils/googleCalendar");
 
 /**
  * POST /webhook/stripe
@@ -91,6 +91,22 @@ async function markPaymentFinal(session, finalStatus) {
     cotizacion.saldoPendiente = 0;
   }
   await cotizacion.save();
+
+  // ── Crear evento en Google Calendar (idempotente) ──
+  // Solo si la cotización aún no tiene calendarEventId (evita
+  // duplicados cuando paga primero anticipo y después saldo).
+  // En su propio try/catch para no romper el webhook si Calendar falla.
+  if (!cotizacion.calendarEventId) {
+    try {
+      const eventId = await createCotizacionEvent(cotizacion, payment.cotizacionType);
+      if (eventId) {
+        cotizacion.calendarEventId = eventId;
+        await cotizacion.save();
+      }
+    } catch (e) {
+      console.error(`[webhook] error creando evento Calendar para cotización ${cotizacion._id}:`, e.message);
+    }
+  }
 }
 
 router.post("/", async (req, res) => {

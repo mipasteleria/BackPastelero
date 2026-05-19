@@ -4,6 +4,7 @@ const Prices = require("../models/pastelCotiza");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { calcularCosteo } = require("../jobs/costeoHandler");
+const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
 
 //Enviar Cotización Cake
 router.post("/", async (req, res) => {
@@ -56,6 +57,11 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     if (!updatedPrice) {
       return res.status(404).send({ message: "Price not found" });
     }
+
+    // Sincronizar Google Calendar (no bloquea la respuesta).
+    // Si status pasó a "Agendado..." sin calendarEventId → crea evento.
+    // Si status pasó a "Cancelado" y hay calendarEventId → borra evento.
+    syncCotizacionCalendar(Prices, updatedPrice, "Pastel");
 
     res.send({ message: "Price updated", data: updatedPrice });
   } catch (error) {
