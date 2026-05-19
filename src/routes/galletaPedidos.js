@@ -10,8 +10,14 @@ const { generarNumeroOrden } = require("../utils/orderNumber");
 const { resolverZona, ZONAS } = require("../utils/zonasEnvio");
 const { validarFechaHora, getSlotsValidos } = require("../utils/galletaSlots");
 const { createGalletaEvent, deleteEvent } = require("../utils/googleCalendar");
+const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
 
 const FRONT_DOMAIN = process.env.FRONT_DOMAIN;
+
+// Notas internas de admin (POST + DELETE en /:id/notas-internas/*).
+// El front-end del cliente NUNCA debe leer este campo. El GET público
+// /orden/:numeroOrden filtra el campo antes de responder.
+mountNotaInternaRoutes(router, GalletaPedido, "Pedido");
 
 /**
  * Rutas de Pedidos de Galletas NY.

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const costeoSnapshotSchema = require("./costeoSnapshot");
+const notaInternaSchema = require("./notaInternaSchema");
 
 const pastelSchema = new mongoose.Schema(
   {
@@ -124,6 +125,12 @@ const pastelSchema = new mongoose.Schema(
     calendarEventId: {
       type: String,
       default: "",
+    },
+    // Notas internas de admin (append-only desde UI). Ver
+    // src/models/notaInternaSchema.js. NO se expone al cliente final.
+    notasInternas: {
+      type: [notaInternaSchema],
+      default: [],
     },
   },
   {

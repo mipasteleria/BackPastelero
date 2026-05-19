@@ -106,6 +106,14 @@ const galletaPedidoSchema = new mongoose.Schema(
 
     // Google Calendar
     calendarEventId: { type: String, default: "" },
+
+    // Notas internas de admin (append-only desde UI). Ver
+    // src/models/notaInternaSchema.js. Solo se exponen en respuestas
+    // del admin — el endpoint público GET /orden/:numeroOrden las omite.
+    notasInternas: {
+      type: [require("./notaInternaSchema")],
+      default: [],
+    },
   },
   { timestamps: true }
 );
