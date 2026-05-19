@@ -17,6 +17,22 @@ const checkRoleToken = require("../middlewares/myRoleToken");
  * @param {string} entidadLabel    Etiqueta para mensajes (ej. "Pedido", "Cotización")
  */
 function mountNotaInternaRoutes(router, Model, entidadLabel = "Documento") {
+  // Leer notas internas (admin-only). Necesario porque el GET /:id de
+  // cotizaciones es público y filtra notasInternas — el admin necesita
+  // esta ruta dedicada para verlas en el dashboard.
+  router.get("/:id/notas-internas", checkRoleToken("admin"), async (req, res) => {
+    try {
+      const doc = await Model.findById(req.params.id).select("notasInternas");
+      if (!doc) return res.status(404).json({ message: `${entidadLabel} no encontrado` });
+      res.json({
+        data: doc.notasInternas || [],
+        total: (doc.notasInternas || []).length,
+      });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Agregar nota interna
   router.post("/:id/notas-internas", checkRoleToken("admin"), async (req, res) => {
     try {
