@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const costeoSnapshotSchema = require("./costeoSnapshot");
+const notaInternaSchema = require("./notaInternaSchema");
 
 const pastelSchema = new mongoose.Schema(
   {
@@ -110,6 +112,25 @@ const pastelSchema = new mongoose.Schema(
     },
     userId: {
       type: String,
+    },
+    images: [{ type: String }],
+    costeoSnapshot: {
+      type: costeoSnapshotSchema,
+      default: null,
+    },
+    // ID del evento creado en Google Calendar cuando la cotización pasa a
+    // estado "Agendado...". Se usa para borrar el evento si después se
+    // cancela. Empty string = sin evento (más friendly que null para
+    // comparaciones en el código).
+    calendarEventId: {
+      type: String,
+      default: "",
+    },
+    // Notas internas de admin (append-only desde UI). Ver
+    // src/models/notaInternaSchema.js. NO se expone al cliente final.
+    notasInternas: {
+      type: [notaInternaSchema],
+      default: [],
     },
   },
   {

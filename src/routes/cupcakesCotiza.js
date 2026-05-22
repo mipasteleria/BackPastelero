@@ -2,6 +2,13 @@ const express = require("express");
 const router = express.Router();
 const Prices = require("../models/cupcakesCotiza");
 const checkRoleToken = require("../middlewares/myRoleToken");
+const { requireAuth } = checkRoleToken;
+const { calcularCosteo } = require("../jobs/costeoHandler");
+const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
+const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
+
+// Notas internas de admin (POST + DELETE en /:id/notas-internas/*).
+mountNotaInternaRoutes(router, Prices, "Cotización Cupcake");
 
 //Enviar Cotización Cupcake
 router.post("/", async (req, res) => {
@@ -16,21 +23,24 @@ router.post("/", async (req, res) => {
   }
 });
 
-//Recuperar Datos Cotización Cupcake — solo admin
-router.get("/", checkRoleToken("admin"), async (req, res) => {
+//Recuperar Datos Cotización Cupcake — admin ve todo, user solo sus propias.
+// `notasInternas` se excluye para non-admin.
+router.get("/", requireAuth, async (req, res) => {
   try {
-    const pricesData = await Prices.find();
-    res.send({ message: "All Prices cupcake", data: pricesData });
+    const filter = req.user.role === "admin" ? {} : { userId: String(req.user._id) };
+    const projection = req.user.role === "admin" ? "" : "-notasInternas";
+    const pricesData = await Prices.find(filter).select(projection);
+    res.send({ message: "All Prices cupcake", data: pricesData, total: pricesData.length });
   } catch (error) {
     res.status(400).send({ message: error });
   }
 });
 
-//Obtener Cotizaciones por ID Cupcake
+//Obtener Cotizaciones por ID Cupcake — endpoint público, esconde notas internas.
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const pricesid = await Prices.findById({ _id: id });
+    const pricesid = await Prices.findById({ _id: id }).select("-notasInternas");
     res.send({ message: "Price by ID cupcake", data: pricesid });
   } catch (error) {
     res.status(400).send({ message: error });
@@ -45,6 +55,8 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     const newPrices = await Prices.findByIdAndUpdate(id, newPrice, {
       returnOriginal: false,
     });
+    // Sincronizar Google Calendar (no bloquea).
+    syncCotizacionCalendar(Prices, newPrices, "Cupcake");
     res.send({ message: "Price updated", data: newPrices });
   } catch (error) {
     res.status(400).send({ message: error });
@@ -59,6 +71,24 @@ router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
     res.send({ message: "Price deleted" });
   } catch (error) {
     res.status(400).send({ message: error });
+  }
+});
+
+// Calcular y guardar costeo — solo admin
+// Body: { recetaId, tecnicaIds[], margenDeseado, ivaPercent? }
+router.post("/:id/costeo", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const cotizacion = await Prices.findById(req.params.id);
+    if (!cotizacion) return res.status(404).json({ message: "Cotización no encontrada" });
+
+    const porciones = parseInt(cotizacion.portions, 10);
+    if (!porciones || porciones <= 0)
+      return res.status(400).json({ message: "La cotización no tiene porciones válidas" });
+
+    const snapshot = await calcularCosteo(cotizacion, porciones, req.body);
+    res.json({ message: "Costeo calculado", data: snapshot });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

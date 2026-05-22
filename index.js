@@ -20,6 +20,11 @@ const recetasRoutes = require("./src/routes/recetas");
 const ingredientesRoutes = require("./src/routes/recetas/ingredientes");
 const notificacionesRoutes = require("./src/routes/notificaciones");
 const costsRoutes = require("./src/routes/costs.js");
+const tecnicasCreativasRoutes = require("./src/routes/tecnicasCreativas.js");
+const productosRoutes = require("./src/routes/productos.js");
+const galletaSaboresRoutes = require("./src/routes/galletaSabores.js");
+const galletaPedidosRoutes = require("./src/routes/galletaPedidos.js");
+const calendarStatusRoutes = require("./src/routes/calendarStatus.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
@@ -47,6 +52,22 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Esperar a que MongoDB esté conectado antes de procesar requests.
+// Sin esto, en Vercel un cold-start puede dejar la query en buffer hasta
+// que excede los 10s del timeout de la función → 504. Mejor await la
+// conexión (fail-fast a 8s, ver db.js) y devolver 503 claro si falla.
+// /health se exime para que healthchecks no se bloqueen por DB.
+app.use(async (req, res, next) => {
+  if (req.path === "/health") return next();
+  try {
+    await mongoDB.ensureConnection();
+    next();
+  } catch (e) {
+    console.error("[db middleware] connection failed:", e.message);
+    res.status(503).json({ message: "Servicio temporalmente no disponible" });
+  }
+});
+
 // IMPORTANTE: el webhook de Stripe debe recibir el body CRUDO para que la
 // verificación de firma HMAC funcione. Se monta con express.raw ANTES de
 // express.json(), que de lo contrario transformaría el buffer y rompería
@@ -65,8 +86,17 @@ app.use("/recetas", recetasRoutes);
 app.use("/recetas/ingredientes", ingredientesRoutes);
 app.use("/checkout", createCheckoutSession);
 app.use("/costs", costsRoutes);
+app.use("/tecnicas", tecnicasCreativasRoutes);
+app.use("/productos", productosRoutes);
+app.use("/galletaSabores", galletaSaboresRoutes);
+app.use("/galletaPedidos", galletaPedidosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
+app.use("/admin", calendarStatusRoutes);
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", ts: Date.now() });
+});
+
 app.get("/", (req, res) => {
   res.send(`
         <!DOCTYPE html>
@@ -129,12 +159,14 @@ app.get("/", (req, res) => {
     `);
 });
 
-const storage = new Storage({
-  projectId: process.env.PROJECT_ID,
-  keyFilename: process.env.KEYFILENAME,
-});
-
+let storage = null;
 const bucketName = process.env.BUCKET_NAME;
+try {
+  const gcsCredentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+  storage = new Storage({ projectId: process.env.PROJECT_ID, credentials: gcsCredentials });
+} catch (e) {
+  console.error("GCS init failed — uploads disabled:", e.message);
+}
 
 // Configuración de multer para usar Google Cloud Storage directamente.
 // Validamos tipo (sólo imágenes web) y tamaño (8 MB por archivo, 5 archivos).
@@ -171,21 +203,41 @@ function buildSafeFileName(file) {
   return `${Date.now()}-${rand}-${base}${ext}`;
 }
 
-async function uploadFileToGCS(file, bucketName) {
+/**
+ * Sube un archivo a GCS y devuelve la URL para servirlo.
+ *
+ * IMPORTANTE: NO devolvemos la URL directa de GCS porque el bucket
+ * `bucketpasteleria` está en modo Uniform IAM y no es público. En su
+ * lugar devolvemos una URL que apunta al endpoint /file/:filename de
+ * este mismo backend, que actúa como proxy autenticado vía service
+ * account.
+ *
+ * Ventaja: la URL nunca expira y funciona aún con buckets privados.
+ * Costo: cada request de imagen pasa por un function de Vercel (~ms).
+ */
+async function uploadFileToGCS(file, bucketName, req) {
   const bucket = storage.bucket(bucketName);
   const safeName = buildSafeFileName(file);
   const blob = bucket.file(safeName);
   const blobStream = blob.createWriteStream({
     resumable: false,
     gzip: true,
-    metadata: { contentType: file.mimetype },
+    metadata: {
+      contentType: file.mimetype,
+      cacheControl: "public, max-age=31536000, immutable",
+    },
   });
 
   return new Promise((resolve, reject) => {
-    blobStream.on("error", (err) => reject(err));
+    blobStream.on("error", reject);
     blobStream.on("finish", () => {
-      const publicUrl = `https://storage.googleapis.com/${bucketName}/${encodeURIComponent(safeName)}`;
-      resolve({ message: "File uploaded successfully", fileUrl: publicUrl, fileName: safeName });
+      // URL de nuestro proxy — funciona independientemente del modo IAM
+      // del bucket. Si en el futuro hacen el bucket público pueden cambiar
+      // este URL al patrón directo de GCS sin migrar datos.
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host;
+      const fileUrl = `${protocol}://${host}/file/${encodeURIComponent(safeName)}`;
+      resolve({ message: "File uploaded successfully", fileUrl, fileName: safeName });
     });
     blobStream.end(file.buffer);
   });
@@ -195,6 +247,7 @@ async function uploadFileToGCS(file, bucketName) {
 // El fileFilter de multer rechaza tipos no permitidos; aquí capturamos el error
 // y devolvemos 400 en lugar de 500 genérico.
 app.post("/upload", requireAuth, (req, res, next) => {
+  if (!storage) return res.status(503).json({ error: "File upload not configured" });
   upload.array("files")(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
@@ -202,16 +255,67 @@ app.post("/upload", requireAuth, (req, res, next) => {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: "No files received" });
     }
-    Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName)))
+    Promise.all(req.files.map((file) => uploadFileToGCS(file, bucketName, req)))
       .then((results) => res.status(200).json(results))
       .catch((e) => {
-        console.error("Error uploading files:", e);
-        res.status(500).json({ error: "Error uploading files" });
+        console.error("Error uploading files:", e.message, e.code ?? "");
+        res.status(500).json({ error: e.message || "Error uploading files" });
       });
   });
 });
 
-// Ver imagen
+/**
+ * GET /file/:filename — sirve archivos desde GCS como proxy.
+ *
+ * Funciona aún con buckets en modo Uniform IAM no-públicos: el backend
+ * usa el service account (que sí tiene permiso de lectura) para leer
+ * el archivo y lo retransmite al cliente con headers de cache agresivos.
+ *
+ * Validación: solo permite nombres de archivo seguros (los que genera
+ * buildSafeFileName). Esto bloquea path traversal y consultas a archivos
+ * que no se subieron por nuestra app.
+ */
+app.get("/file/:filename", async (req, res) => {
+  // Helper: setear no-cache en respuestas de error para evitar que
+  // navegadores/CDN cacheen 403/404/500 transitorios (p.ej. durante un
+  // deploy). El navegador podría memorizar el error por mucho tiempo si
+  // por suerte le tocó una respuesta cacheable.
+  const sendError = (status, msg) => {
+    if (!res.headersSent) {
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+      res.status(status).json({ error: msg });
+    }
+  };
+
+  if (!storage) return sendError(503, "GCS not configured");
+  try {
+    const { filename } = req.params;
+    if (!/^[A-Za-z0-9._-]+$/.test(filename)) {
+      return sendError(400, "Nombre de archivo inválido");
+    }
+
+    const file = storage.bucket(bucketName).file(filename);
+    const [exists] = await file.exists();
+    if (!exists) return sendError(404, "Archivo no encontrado");
+
+    const [metadata] = await file.getMetadata();
+    res.setHeader("Content-Type", metadata.contentType || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    if (metadata.size) res.setHeader("Content-Length", metadata.size);
+
+    file.createReadStream()
+      .on("error", (e) => {
+        console.error("[/file] stream error:", e.message);
+        sendError(500, "Error sirviendo archivo");
+      })
+      .pipe(res);
+  } catch (e) {
+    console.error("[/file] error:", e.message);
+    sendError(500, e.message);
+  }
+});
+
+// Ver imagen (legacy — devuelve signed URL)
 app.get("/image-url/:filename", async (req, res) => {
   try {
     const fileName = req.params.filename;
@@ -231,19 +335,25 @@ app.get("/image-url/:filename", async (req, res) => {
   }
 });
 
-mongoDB.connect
-  .then((message) => {
-    console.log(message);
-    startReminderCron();
-    app.listen(port, () => {
-      console.log("Server is listening on port", port);
-    });
-  })
-  .catch((error) => {
-    console.error("Error connecting to MongoDB:", error);
-  });
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
 });
+
+// En Vercel (serverless) la conexión se inicia al cargar el módulo y se
+// exporta el app directamente. En local se usa app.listen() como siempre.
+if (!process.env.VERCEL) {
+  mongoDB.connect
+    .then((message) => {
+      console.log(message);
+      startReminderCron();
+      app.listen(port, () => {
+        console.log("Server is listening on port", port);
+      });
+    })
+    .catch((error) => {
+      console.error("Error connecting to MongoDB:", error);
+    });
+}
+
+module.exports = app;

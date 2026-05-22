@@ -66,4 +66,47 @@ router.put('/:id', checkRoleToken('admin'), async (req, res) => {
   }
 });
 
+// Obtener el único documento de costos sin conocer su ID
+router.get('/', async (req, res) => {
+  try {
+    const cost = await Cost.findOne();
+    if (!cost) return res.status(404).json({ message: "No hay costos configurados" });
+    res.json(cost);
+  } catch (error) {
+    console.error("Error obteniendo costos:", error);
+    res.status(500).json({ message: "Error al obtener los costos" });
+  }
+});
+
+// Actualizar (o crear si no existe) el único documento de costos — solo admin.
+// `fixedCosts` y `laborCosts` siguen siendo requeridos (compat con el form
+// existente de gastosfijosymanodeobra). Los 3 campos de galletas
+// (`costoBrandingPorGalleta`, `markupGalletasPct`, `margenMinimoGalleta`)
+// son opcionales — solo se actualizan si vienen en el body. Esto permite
+// que el front mande payloads parciales sin pisar valores existentes.
+router.put('/', checkRoleToken('admin'), async (req, res) => {
+  try {
+    const {
+      fixedCosts, laborCosts,
+      costoBrandingPorGalleta, markupGalletasPct, margenMinimoGalleta,
+    } = req.body;
+    if (fixedCosts === undefined || laborCosts === undefined) {
+      return res.status(400).json({ message: "Parámetros 'fixedCosts' y 'laborCosts' son requeridos" });
+    }
+    const update = { fixedCosts, laborCosts };
+    if (costoBrandingPorGalleta !== undefined) update.costoBrandingPorGalleta = costoBrandingPorGalleta;
+    if (markupGalletasPct       !== undefined) update.markupGalletasPct       = markupGalletasPct;
+    if (margenMinimoGalleta     !== undefined) update.margenMinimoGalleta     = margenMinimoGalleta;
+    const cost = await Cost.findOneAndUpdate(
+      {},
+      update,
+      { upsert: true, new: true }
+    );
+    res.json(cost);
+  } catch (error) {
+    console.error("Error actualizando costos:", error);
+    res.status(500).json({ message: "Error al actualizar los costos" });
+  }
+});
+
 module.exports = router;

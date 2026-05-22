@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const costeoSnapshotSchema = require("./costeoSnapshot");
 
 const cupcakesSchema = new mongoose.Schema(
   {
@@ -93,6 +94,20 @@ const cupcakesSchema = new mongoose.Schema(
     },
     userId: {
       type: String,
+    },
+    images: [{ type: String }],
+    costeoSnapshot: {
+      type: costeoSnapshotSchema,
+      default: null,
+    },
+    // ID del evento de Google Calendar (mismo patrón que pastelCotiza).
+    calendarEventId: {
+      type: String,
+      default: "",
+    },
+    notasInternas: {
+      type: [require("./notaInternaSchema")],
+      default: [],
     },
   },
   {
