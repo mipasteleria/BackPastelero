@@ -2,7 +2,7 @@
  * Utilidades para validar fechas y horarios de entrega de Galletas NY.
  *
  * Reglas:
- *  - Anticipación mínima: 72 horas desde el momento de la compra
+ *  - Anticipación mínima: 48 horas desde el momento de la compra
  *  - Días: Lunes a Sábado (no domingo)
  *  - Horarios:
  *      Recogida en sucursal: 10:00 a 18:30 (slots de 30 min)
@@ -24,7 +24,7 @@ const SLOTS_ENVIO = [
   "17:00", "17:30",
 ];
 
-const HORAS_72 = 72 * 60 * 60 * 1000;
+const HORAS_48 = 48 * 60 * 60 * 1000;
 
 /**
  * Devuelve los slots permitidos según tipo de entrega.
@@ -48,10 +48,10 @@ function validarFechaHora({ fecha, hora, tipoEntrega }) {
     return { ok: false, error: "Fecha inválida" };
   }
 
-  // 1) Mínimo 72h de anticipación.
+  // 1) Mínimo 48h de anticipación.
   const ahora = Date.now();
-  if (f.getTime() < ahora + HORAS_72) {
-    return { ok: false, error: "La fecha debe ser al menos 72 horas después de hoy" };
+  if (f.getTime() < ahora + HORAS_48) {
+    return { ok: false, error: "La fecha debe ser al menos 48 horas después de hoy" };
   }
 
   // 2) No domingos. (getDay: 0=Dom, 1=Lun, ..., 6=Sáb)
