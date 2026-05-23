@@ -2,9 +2,60 @@ const express = require("express");
 const router = express.Router();
 const { Storage } = require("@google-cloud/storage");
 const Postre = require("../models/postre");
+const Receta = require("../models/recetas/recetas");
+const Cost = require("../models/costs");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 const MAX_DESTACADOS = 4;
+
+function round2(n) { return Math.round(n * 100) / 100; }
+
+/**
+ * Calcula el desglose de precio sugerido para un postre, dada una
+ * receta + empaque del postre + config global. Reusa el patrón de
+ * galletaSabores.calcular-precio pero con empaque por postre.
+ */
+async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, markupPctOverride } = {}) {
+  const receta = await Receta.findById(recetaId);
+  if (!receta) throw new Error("Receta no encontrada");
+  if (!receta.portions || receta.portions <= 0) {
+    throw new Error("La receta no tiene `portions` válido");
+  }
+
+  const cfg = await Cost.findOne();
+  const costoBranding = cfg?.costoBrandingPorPostre ?? 0;
+  const markupDefault = cfg?.markupPostresPct ?? 60;
+
+  // Prioridad de markup: override del body > profit_margin de la receta > default global.
+  let markup;
+  if (typeof markupPctOverride === "number" && markupPctOverride >= 0) {
+    markup = markupPctOverride;
+  } else if (typeof receta.profit_margin === "number" && receta.profit_margin >= 0) {
+    markup = receta.profit_margin;
+  } else {
+    markup = markupDefault;
+  }
+
+  const costoMateriaPrima = round2(receta.total_cost / receta.portions);
+  const empaque = Number(costoEmpaque) || 0;
+  const costoTotal = round2(costoMateriaPrima + costoBranding + empaque);
+  const precioSugerido = round2(costoTotal * (1 + markup / 100));
+
+  return {
+    receta: {
+      _id: receta._id,
+      nombre_receta: receta.nombre_receta,
+      portions: receta.portions,
+      total_cost: receta.total_cost,
+    },
+    costoMateriaPrima,
+    costoBranding,
+    costoEmpaque: empaque,
+    costoTotal,
+    markupPct: markup,
+    precioSugerido,
+  };
+}
 
 // Cliente GCS local para borrar archivos huérfanos al reemplazar o
 // eliminar postres (mismo patrón que homeConfig.js).
@@ -38,6 +89,8 @@ const CAMPOS_EDITABLES = [
   "activo",
   "destacado",
   "orden",
+  "recetaId",
+  "costoEmpaque",
 ];
 
 function pickEditables(body) {
@@ -85,6 +138,34 @@ router.get("/destacados", async (req, res) => {
   } catch (e) {
     console.error("Error obteniendo destacados:", e);
     res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * POST /postres/calcular-precio — admin.
+ *
+ * Dado { recetaId, costoEmpaque, markupPct? }, devuelve un breakdown
+ * del precio sugerido para un postre. NO modifica nada — solo calcula
+ * en base a la receta y la config global. El admin decide si usa el
+ * sugerido o setea `precio` manualmente al guardar el postre.
+ *
+ * Análogo a POST /galletaSabores/calcular-precio pero con empaque
+ * variable por postre (no por catálogo global como branding).
+ */
+router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const { recetaId, costoEmpaque, markupPct } = req.body || {};
+    if (!recetaId) return res.status(400).json({ message: "recetaId es requerido" });
+
+    const data = await calcularDesglosePostre({
+      recetaId,
+      costoEmpaque,
+      markupPctOverride: typeof markupPct === "number" ? markupPct : undefined,
+    });
+    res.json({ message: "Precio calculado", data });
+  } catch (e) {
+    console.error("Error calculando precio postre:", e);
+    res.status(400).json({ message: e.message });
   }
 });
 

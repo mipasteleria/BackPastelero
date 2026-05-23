@@ -30,6 +30,23 @@ const costSchema = new mongoose.Schema({
     default: 5,
     min: 0,
   },
+
+  // ── Postres: configuración global ──────────────────────────────
+  // Branding por postre — análogo al de galletas pero separado por si
+  // el costo varía (ej. etiqueta más grande, sticker premium). El
+  // empaque NO va aquí porque varía por postre (domo, caja, etc.).
+  costoBrandingPorPostre: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  // Markup default para postres cuando la receta no tiene profit_margin
+  // o el admin no lo override en el form de postre.
+  markupPostresPct: {
+    type: Number,
+    default: 60,
+    min: 0,
+  },
 });
 
 module.exports = mongoose.model("Cost", costSchema);
