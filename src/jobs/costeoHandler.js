@@ -48,7 +48,16 @@ async function calcularCosteo(cotizacion, porciones, body) {
     tecnicasSnapshot.reduce((s, t) => s + t.costoCalculado, 0)
   );
 
-  const costoTotal = round2(costoReceta + costoTecnicasTotal + costoFijo);
+  // Compat con recetas legacy: las nuevas guardan en `total_cost` el costo
+  // COMPLETO (ingredientes + IEPS + additional + mano_obra + fijos). Las
+  // viejas (sin hours_labor ni hours_fixed) guardan solo el bruto, así que
+  // les sumamos `costoFijo` plano como se hacía antes para no romper su
+  // cálculo histórico.
+  const esRecetaNueva =
+    typeof receta.hours_labor === "number" || typeof receta.hours_fixed === "number";
+  const overheadLegacy = esRecetaNueva ? 0 : costoFijo;
+
+  const costoTotal = round2(costoReceta + costoTecnicasTotal + overheadLegacy);
 
   const precioSugerido = round2(costoTotal * (1 + margenDeseado / 100));
   const ivaImporte = round2(precioSugerido * (ivaPercent / 100));
