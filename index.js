@@ -25,6 +25,7 @@ const productosRoutes = require("./src/routes/productos.js");
 const galletaSaboresRoutes = require("./src/routes/galletaSabores.js");
 const galletaPedidosRoutes = require("./src/routes/galletaPedidos.js");
 const calendarStatusRoutes = require("./src/routes/calendarStatus.js");
+const homeConfigRoutes = require("./src/routes/homeConfig.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
@@ -93,6 +94,7 @@ app.use("/galletaPedidos", galletaPedidosRoutes);
 app.use("/send-confirmation-email", sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
 app.use("/admin", calendarStatusRoutes);
+app.use("/home-config", homeConfigRoutes);
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
