@@ -1,7 +1,34 @@
 const express = require("express");
 const router = express.Router();
+const { Storage } = require("@google-cloud/storage");
 const HomeConfig = require("../models/homeConfig");
 const checkRoleToken = require("../middlewares/myRoleToken");
+
+// Cliente de GCS para poder borrar el archivo de la imagen previa cuando
+// se reemplaza. Reutilizamos la misma config que index.js (PROJECT_ID +
+// GCS_CREDENTIALS + BUCKET_NAME).
+let gcs = null;
+try {
+  const credentials = process.env.GCS_CREDENTIALS ? JSON.parse(process.env.GCS_CREDENTIALS) : undefined;
+  gcs = new Storage({ projectId: process.env.PROJECT_ID, credentials });
+} catch (e) {
+  console.error("[home-config] GCS init failed — file cleanup disabled:", e.message);
+}
+const BUCKET = process.env.BUCKET_NAME;
+
+/**
+ * Borra un archivo de GCS si existe. Silencioso ante errores: si falla,
+ * solo logea y sigue — un archivo huérfano en el bucket es preferible a
+ * romper el flujo de actualizar la config del home.
+ */
+async function borrarArchivoGCS(fileName) {
+  if (!gcs || !BUCKET || !fileName) return;
+  try {
+    await gcs.bucket(BUCKET).file(fileName).delete({ ignoreNotFound: true });
+  } catch (e) {
+    console.error(`[home-config] No se pudo borrar archivo viejo ${fileName}:`, e.message);
+  }
+}
 
 /**
  * Singleton helper — devuelve la única doc de HomeConfig, creándola con
@@ -49,6 +76,10 @@ router.put("/", checkRoleToken("admin"), async (req, res) => {
     const cfg = await getOrCreateHomeConfig();
     const { imagenHeroUrl, imagenHeroFileName, favoritoSemanaHref, nuevoSaborHref } = req.body || {};
 
+    // Guardamos el fileName previo para poder borrarlo de GCS si se
+    // reemplaza o se quita — evita acumular imágenes huérfanas en el bucket.
+    const fileNamePrevio = cfg.imagenHeroFileName || "";
+
     if (typeof imagenHeroUrl === "string") {
       cfg.imagenHeroUrl = imagenHeroUrl.trim();
       // Si limpian la URL pero no mandaron fileName, también limpiar fileName.
@@ -65,6 +96,15 @@ router.put("/", checkRoleToken("admin"), async (req, res) => {
     }
 
     await cfg.save();
+
+    // Si el fileName cambió (reemplazo o quitar imagen), borrar el viejo
+    // de GCS. Lo hacemos DESPUÉS de save() para no perder la referencia si
+    // GCS falla, y dentro de un try/catch silencioso para no romper la
+    // respuesta exitosa al admin si el cleanup falla.
+    if (fileNamePrevio && fileNamePrevio !== cfg.imagenHeroFileName) {
+      borrarArchivoGCS(fileNamePrevio); // fire-and-forget (no await)
+    }
+
     res.json({
       message: "Configuración actualizada",
       data: {
