@@ -35,6 +35,24 @@ const postreSchema = new mongoose.Schema(
       min: [0, "Precio no puede ser negativo"],
     },
 
+    // ── Costeo opcional desde receta ──────────────────────────────
+    // Si `recetaId` está presente, el sistema puede sugerir un precio
+    // basado en (receta.total_cost / receta.portions) + branding global
+    // + empaque de este postre + markup. Es informativo — el admin
+    // puede usar el sugerido o setear `precio` manualmente.
+    recetaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Receta",
+      default: null,
+    },
+    // Empaque varía por postre (domo, caja, base de cartón, etc.).
+    // Se suma al costo unitario antes de aplicar el markup.
+    costoEmpaque: {
+      type: Number,
+      default: 0,
+      min: [0, "El costo de empaque no puede ser negativo"],
+    },
+
     // Imagen del producto. fileName se guarda para poder borrar el blob
     // de GCS cuando se reemplaza o se elimina el postre (evita huérfanos).
     imagenUrl:      { type: String, default: "" },

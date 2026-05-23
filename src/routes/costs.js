@@ -89,6 +89,7 @@ router.put('/', checkRoleToken('admin'), async (req, res) => {
     const {
       fixedCosts, laborCosts,
       costoBrandingPorGalleta, markupGalletasPct, margenMinimoGalleta,
+      costoBrandingPorPostre, markupPostresPct,
     } = req.body;
     if (fixedCosts === undefined || laborCosts === undefined) {
       return res.status(400).json({ message: "Parámetros 'fixedCosts' y 'laborCosts' son requeridos" });
@@ -97,6 +98,8 @@ router.put('/', checkRoleToken('admin'), async (req, res) => {
     if (costoBrandingPorGalleta !== undefined) update.costoBrandingPorGalleta = costoBrandingPorGalleta;
     if (markupGalletasPct       !== undefined) update.markupGalletasPct       = markupGalletasPct;
     if (margenMinimoGalleta     !== undefined) update.margenMinimoGalleta     = margenMinimoGalleta;
+    if (costoBrandingPorPostre  !== undefined) update.costoBrandingPorPostre  = costoBrandingPorPostre;
+    if (markupPostresPct        !== undefined) update.markupPostresPct        = markupPostresPct;
     const cost = await Cost.findOneAndUpdate(
       {},
       update,
