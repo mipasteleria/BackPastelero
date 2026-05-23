@@ -262,6 +262,7 @@ router.post("/checkout", async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded",
+      locale: "es",
       line_items: lineItems,
       mode: "payment",
       return_url: `${FRONT_DOMAIN}/enduser/galletas-confirmacion?session_id={CHECKOUT_SESSION_ID}`,

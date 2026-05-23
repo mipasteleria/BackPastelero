@@ -156,6 +156,7 @@ router.post("/create-checkout-session", requireAuth, async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded",
+      locale: "es",
       line_items: [
         {
           price_data: {
