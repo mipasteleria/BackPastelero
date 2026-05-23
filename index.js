@@ -221,9 +221,14 @@ async function uploadFileToGCS(file, bucketName, req) {
   const bucket = storage.bucket(bucketName);
   const safeName = buildSafeFileName(file);
   const blob = bucket.file(safeName);
+  // NO usamos gzip:true. Las imágenes (PNG/JPG/WEBP) ya están comprimidas
+  // internamente, así que gzip encima no reduce nada y causa un bug
+  // sutil al servir vía proxy: `metadata.size` reporta el tamaño comprimido,
+  // `createReadStream()` descomprime al servir, y si seteamos Content-Length
+  // con metadata.size el browser corta el stream a mitad → el PNG se ve
+  // recortado horizontalmente.
   const blobStream = blob.createWriteStream({
     resumable: false,
-    gzip: true,
     metadata: {
       contentType: file.mimetype,
       cacheControl: "public, max-age=31536000, immutable",
@@ -303,7 +308,13 @@ app.get("/file/:filename", async (req, res) => {
     const [metadata] = await file.getMetadata();
     res.setHeader("Content-Type", metadata.contentType || "application/octet-stream");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    if (metadata.size) res.setHeader("Content-Length", metadata.size);
+
+    // NO seteamos Content-Length manualmente. Si el archivo está
+    // gzipped en GCS (legacy de cuando uploadFileToGCS usaba gzip:true),
+    // metadata.size es el comprimido pero createReadStream descomprime
+    // al servir — el browser cortaría el stream al Content-Length
+    // declarado y la imagen llegaría truncada. Dejamos que Express/Node
+    // use Transfer-Encoding: chunked y el browser lee hasta EOF.
 
     file.createReadStream()
       .on("error", (e) => {
