@@ -36,37 +36,56 @@ function getSlotsValidos(tipoEntrega) {
 /**
  * Valida que la combinación fecha+hora sea legal para Galletas NY.
  *
+ * IMPORTANTE — zona horaria:
+ * El cliente vive en Guadalajara (America/Mexico_City, UTC-6, sin DST desde
+ * 2022). El servidor (Vercel) corre en UTC. La fecha y hora se interpretan
+ * SIEMPRE como hora local de Guadalajara — combinamos ambos campos con un
+ * offset explícito `-06:00` para evitar el bug clásico:
+ *
+ *   new Date("2026-05-25")            // → 25 may 00:00 UTC = 24 may 18:00 GDL  ❌
+ *   new Date("2026-05-25T10:00-06:00") // → 25 may 10:00 GDL exacto             ✅
+ *
  * @param {object} input
- * @param {Date|string} input.fecha — fecha de entrega
- * @param {string}      input.hora  — formato "HH:MM" 24h
+ * @param {string} input.fecha — formato "YYYY-MM-DD" (hora local GDL)
+ * @param {string} input.hora  — formato "HH:MM" 24h (hora local GDL)
  * @param {"recogida"|"envio"} input.tipoEntrega
  * @returns {{ok:true} | {ok:false, error:string}}
  */
 function validarFechaHora({ fecha, hora, tipoEntrega }) {
-  const f = fecha instanceof Date ? fecha : new Date(fecha);
-  if (isNaN(f.getTime())) {
-    return { ok: false, error: "Fecha inválida" };
-  }
-
-  // 1) Mínimo 48h de anticipación.
-  const ahora = Date.now();
-  if (f.getTime() < ahora + HORAS_48) {
-    return { ok: false, error: "La fecha debe ser al menos 48 horas después de hoy" };
-  }
-
-  // 2) No domingos. (getDay: 0=Dom, 1=Lun, ..., 6=Sáb)
-  const dow = f.getDay();
-  if (dow === 0) {
-    return { ok: false, error: "No realizamos entregas los domingos" };
-  }
-
-  // 3) Hora dentro del rango.
+  // 1) Hora debe ser un slot válido (lo validamos primero para que la
+  //    combinación fecha+hora abajo siempre tenga una hora bien formada).
   const slots = getSlotsValidos(tipoEntrega);
   if (!slots.includes(hora)) {
     return {
       ok: false,
       error: `Horario inválido. Disponibles para ${tipoEntrega === "envio" ? "envío" : "recogida"}: ${slots[0]} a ${slots[slots.length - 1]}`,
     };
+  }
+
+  // 2) Fecha debe ser "YYYY-MM-DD".
+  const fechaStr = typeof fecha === "string" ? fecha : null;
+  if (!fechaStr || !/^\d{4}-\d{2}-\d{2}$/.test(fechaStr)) {
+    return { ok: false, error: "Fecha inválida" };
+  }
+
+  // 3) Construir el momento exacto de entrega en hora local GDL.
+  const fechaEntregaMs = Date.parse(`${fechaStr}T${hora}:00-06:00`);
+  if (isNaN(fechaEntregaMs)) {
+    return { ok: false, error: "Fecha inválida" };
+  }
+
+  // 4) Mínimo 48h de anticipación contado desde ahora real.
+  const ahora = Date.now();
+  if (fechaEntregaMs < ahora + HORAS_48) {
+    return { ok: false, error: "La fecha de entrega debe ser al menos 48 horas después de ahora" };
+  }
+
+  // 5) No domingos. getDay() del Date local-construido es correcto a nivel
+  //    de día (no depende de la TZ del server).
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  if (dow === 0) {
+    return { ok: false, error: "No realizamos entregas los domingos" };
   }
 
   return { ok: true };
