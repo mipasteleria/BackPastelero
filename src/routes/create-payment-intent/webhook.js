@@ -9,8 +9,10 @@ const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
+const PostrePedido  = require("../../models/postrePedido");
 const { sendGalletaConfirmation, sendGalletaConfirmationToAdmin, sendLowStockAlert } = require("./galletaEmails");
-const { createGalletaEvent, createCotizacionEvent } = require("../../utils/googleCalendar");
+const { sendPostreConfirmation, sendPostreConfirmationToAdmin } = require("./postreEmails");
+const { createGalletaEvent, createPostreEvent, createCotizacionEvent } = require("../../utils/googleCalendar");
 
 /**
  * POST /webhook/stripe
@@ -131,15 +133,18 @@ router.post("/", async (req, res) => {
 
   try {
     const session = event.data.object;
-    // Las sesiones de Galletas NY se distinguen por metadata.tipo. Las
-    // cotizaciones tradicionales no traen ese campo, así que el switch
-    // por tipo de evento sigue su flujo original.
-    const esGalletaNY = session?.metadata?.tipo === "galleta_ny";
+    // Las sesiones se distinguen por metadata.tipo. Galletas NY, postres
+    // y cotizaciones tradicionales tienen lógica distinta.
+    const tipoSession = session?.metadata?.tipo;
+    const esGalletaNY = tipoSession === "galleta_ny";
+    const esPostre    = tipoSession === "postre";
 
     switch (event.type) {
       case "checkout.session.completed":
         if (esGalletaNY) {
           await procesarPedidoGalleta(session, "paid");
+        } else if (esPostre) {
+          await procesarPedidoPostre(session, "paid");
         } else {
           await markPaymentFinal(session, "paid");
         }
@@ -147,6 +152,8 @@ router.post("/", async (req, res) => {
       case "checkout.session.expired":
         if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
+        } else if (esPostre) {
+          await procesarPedidoPostre(session, "failed");
         } else {
           await markPaymentFinal(session, "expired");
         }
@@ -154,6 +161,8 @@ router.post("/", async (req, res) => {
       case "checkout.session.async_payment_failed":
         if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
+        } else if (esPostre) {
+          await procesarPedidoPostre(session, "failed");
         } else {
           await markPaymentFinal(session, "failed");
         }
@@ -276,6 +285,73 @@ async function procesarPedidoGalleta(session, finalStatus) {
     } catch (e) {
       console.error("[webhook galleta] error enviando aviso stock bajo:", e.message);
     }
+  }
+}
+
+/**
+ * Procesa el resultado de una sesión de checkout de Postres.
+ *
+ * Acciones cuando finalStatus === "paid":
+ *   1) Marca el pedido como `estadoPago: paid`, `estado: confirmado`
+ *   2) Envía email de confirmación al cliente y aviso al admin
+ *   3) Crea evento en Google Calendar
+ *
+ * A diferencia de galletas, NO descuenta stock (postres se hacen bajo pedido).
+ *
+ * Idempotente: si el pedido ya está en el estado solicitado, no-op.
+ */
+async function procesarPedidoPostre(session, finalStatus) {
+  const pedidoId = session?.metadata?.pedidoId;
+  if (!pedidoId) {
+    console.warn(`[webhook postre] session ${session.id} sin pedidoId`);
+    return;
+  }
+
+  const pedido = await PostrePedido.findById(pedidoId);
+  if (!pedido) {
+    console.warn(`[webhook postre] Pedido no encontrado: ${pedidoId}`);
+    return;
+  }
+
+  if (pedido.estadoPago === finalStatus) return; // idempotencia
+
+  pedido.estadoPago = finalStatus;
+  if (session.payment_intent) {
+    pedido.stripePaymentIntentId = session.payment_intent;
+  }
+
+  if (finalStatus !== "paid") {
+    pedido.estado = "cancelado";
+    await pedido.save();
+    return;
+  }
+
+  pedido.estado = "confirmado";
+  await pedido.save();
+
+  // ── Emails (cada side-effect en su propio try/catch para que un fallo
+  //    no rompa el resto del flujo) ──
+  try {
+    await sendPostreConfirmation(pedido);
+  } catch (e) {
+    console.error("[webhook postre] error enviando email confirmación:", e.message);
+  }
+
+  try {
+    await sendPostreConfirmationToAdmin(pedido);
+  } catch (e) {
+    console.error("[webhook postre] error enviando aviso al admin:", e.message);
+  }
+
+  // ── Calendar event ──
+  try {
+    const eventId = await createPostreEvent(pedido);
+    if (eventId) {
+      pedido.calendarEventId = eventId;
+      await pedido.save();
+    }
+  } catch (e) {
+    console.error("[webhook postre] error creando evento en Calendar:", e.message);
   }
 }
 
