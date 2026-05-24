@@ -28,6 +28,7 @@ const calendarStatusRoutes = require("./src/routes/calendarStatus.js");
 const homeConfigRoutes = require("./src/routes/homeConfig.js");
 const postresRoutes = require("./src/routes/postres.js");
 const postrePedidosRoutes = require("./src/routes/postrePedidos.js");
+const resenasRoutes = require("./src/routes/resenas.js");
 const createCheckoutSession = require("./src/routes/create-payment-intent/server.js");
 const stripeWebhook = require("./src/routes/create-payment-intent/webhook.js");
 const sendConfirmationEmail = require("./src/routes/create-payment-intent/confirmationEmail.js");
@@ -99,6 +100,7 @@ app.use("/admin", calendarStatusRoutes);
 app.use("/home-config", homeConfigRoutes);
 app.use("/postres", postresRoutes);
 app.use("/postrePedidos", postrePedidosRoutes);
+app.use("/resenas", resenasRoutes);
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
