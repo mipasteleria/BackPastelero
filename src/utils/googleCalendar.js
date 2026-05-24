@@ -371,9 +371,101 @@ async function deleteEvent(eventId) {
   }
 }
 
+/**
+ * Crea un evento en Google Calendar para un pedido del catálogo "Top postres".
+ *
+ * Mismo patrón que createGalletaEvent pero adaptado al schema de
+ * PostrePedido (items individuales con cantidad, no cajas).
+ */
+async function createPostreEvent(pedido) {
+  const calendar = getCalendarClient();
+  if (!calendar) return null;
+
+  try {
+    const totalPiezas = (pedido.items || []).reduce((s, it) => s + (it.cantidad || 0), 0);
+    const nombresUnicos = [...new Set((pedido.items || []).map((it) => it.nombre))];
+    const resumenItems = nombresUnicos.length === 1
+      ? nombresUnicos[0]
+      : `${nombresUnicos.length} postres`;
+
+    const summary = `🎂 ${resumenItems} · ${totalPiezas} pza${totalPiezas !== 1 ? "s" : ""} · ${pedido.cliente?.nombre || "Cliente"}`;
+
+    const detalleItems = (pedido.items || [])
+      .map((it) => `  • ${it.cantidad}× ${it.nombre} ($${it.precioUnitario} c/u)`)
+      .join("\n");
+
+    const description = [
+      `Número de orden: ${pedido.numeroOrden}`,
+      ``,
+      `Cliente: ${pedido.cliente?.nombre || "—"}`,
+      `Email: ${pedido.cliente?.email || "—"}`,
+      `Teléfono: ${pedido.cliente?.telefono || "—"}`,
+      ``,
+      pedido.tipoEntrega === "envio" ? `🚗 Envío a domicilio` : `🏪 Recogida en sucursal`,
+      ``,
+      `Postres:`,
+      detalleItems,
+      ``,
+      `Subtotal: $${pedido.subtotalProductos}`,
+      pedido.costoEnvio > 0 ? `Envío: $${pedido.costoEnvio}` : null,
+      `Total: $${pedido.total}`,
+      ``,
+      pedido.notas ? `Notas del cliente: ${pedido.notas}` : null,
+    ].filter(Boolean).join("\n");
+
+    let location = "";
+    if (pedido.tipoEntrega === "envio" && pedido.direccionEnvio) {
+      const d = pedido.direccionEnvio;
+      location = [d.calleNumero, d.colonia, d.municipio, "Jalisco, México"]
+        .filter(Boolean).join(", ");
+    } else {
+      location = "Calle Bogotá 2866a, Col. Providencia, Guadalajara, Jal.";
+    }
+
+    const startISO = combinarFechaHora(pedido.fechaEntrega, pedido.horaEntrega);
+    const endISO   = sumarMinutos(startISO, 30);
+
+    const event = {
+      summary,
+      description,
+      location,
+      start: { dateTime: startISO, timeZone: TIMEZONE },
+      end:   { dateTime: endISO,   timeZone: TIMEZONE },
+      // colorId distinto del de galletas (5 = "Banana") para que en
+      // el calendario se distingan postres vs galletas a simple vista.
+      colorId: pedido.tipoEntrega === "envio" ? "9" : "5",
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: "popup", minutes: 24 * 60 },
+          { method: "popup", minutes: 60 },
+        ],
+      },
+      extendedProperties: {
+        private: {
+          numeroOrden: pedido.numeroOrden,
+          tipoProducto: "postre",
+        },
+      },
+    };
+
+    const res = await calendar.events.insert({
+      calendarId: getCalendarId(),
+      requestBody: event,
+    });
+
+    console.log(`[gcal] evento creado para ${pedido.numeroOrden}: ${res.data.id}`);
+    return res.data.id;
+  } catch (e) {
+    console.error(`[gcal] error creando evento postre para ${pedido.numeroOrden}:`, e.message);
+    return null;
+  }
+}
+
 module.exports = {
   getCalendarClient,
   createGalletaEvent,
+  createPostreEvent,
   createCotizacionEvent,
   parseDeliveryDateStr,
   deleteEvent,
