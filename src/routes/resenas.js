@@ -67,6 +67,45 @@ async function verificarCompra({ tipo, productoId, productoSlug, userId, email }
 }
 
 /**
+ * GET /resenas/ratings/:tipo — público.
+ *
+ * Devuelve un mapa { "<productoId>": { promedio, total } } con los
+ * agregados de rating para TODOS los productos del tipo (postre|galleta).
+ *
+ * Útil para mostrar el rating en cada card de un listado sin tener que
+ * hacer N requests separados (un fetch trae todos los ratings).
+ */
+router.get("/ratings/:tipo", async (req, res) => {
+  try {
+    const tipo = req.params.tipo;
+    if (!["postre", "galleta"].includes(tipo)) {
+      return res.status(400).json({ message: "tipo debe ser 'postre' o 'galleta'" });
+    }
+    const agg = await Resena.aggregate([
+      { $match: { "producto.tipo": tipo, visible: true } },
+      {
+        $group: {
+          _id: "$producto.productoId",
+          promedio: { $avg: "$rating" },
+          total:    { $sum: 1 },
+        },
+      },
+    ]);
+    const map = {};
+    agg.forEach((r) => {
+      map[String(r._id)] = {
+        promedio: Math.round(r.promedio * 10) / 10,
+        total:    r.total,
+      };
+    });
+    res.json({ data: map });
+  } catch (e) {
+    console.error("Error obteniendo ratings:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
  * GET /resenas/producto/:tipo/:productoId — público.
  * Lista las reseñas visibles para un producto + agregados (promedio,
  * total). Para galletas, `:productoId` también acepta el slug.
