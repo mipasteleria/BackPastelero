@@ -15,7 +15,7 @@ function round2(n) { return Math.round(n * 100) / 100; }
  * receta + empaque del postre + config global. Reusa el patrón de
  * galletaSabores.calcular-precio pero con empaque por postre.
  */
-async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, markupPctOverride } = {}) {
+async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, cantidadReceta = 1, markupPctOverride } = {}) {
   const receta = await Receta.findById(recetaId);
   if (!receta) throw new Error("Receta no encontrada");
   if (!receta.portions || receta.portions <= 0) {
@@ -36,7 +36,12 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, markupPctOve
     markup = markupDefault;
   }
 
-  const costoMateriaPrima = round2(receta.total_cost / receta.portions);
+  // Materia prima = costo unitario de la receta × cuántas unidades usa
+  // este postre. Por ejemplo si la receta rinde 40 porciones y este
+  // postre usa 20, materia prima = (total_cost / 40) × 20 = total_cost / 2.
+  const cantidad = Math.max(0, Number(cantidadReceta) || 1);
+  const costoUnitarioReceta = receta.total_cost / receta.portions;
+  const costoMateriaPrima = round2(costoUnitarioReceta * cantidad);
   const empaque = Number(costoEmpaque) || 0;
   const costoTotal = round2(costoMateriaPrima + costoBranding + empaque);
   const precioSugerido = round2(costoTotal * (1 + markup / 100));
@@ -47,7 +52,10 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, markupPctOve
       nombre_receta: receta.nombre_receta,
       portions: receta.portions,
       total_cost: receta.total_cost,
+      unidadRendimiento: receta.unidadRendimiento || "porcion",
     },
+    cantidadReceta: cantidad,
+    costoUnitarioReceta: round2(costoUnitarioReceta),
     costoMateriaPrima,
     costoBranding,
     costoEmpaque: empaque,
@@ -90,6 +98,7 @@ const CAMPOS_EDITABLES = [
   "destacado",
   "orden",
   "recetaId",
+  "cantidadReceta",
   "costoEmpaque",
 ];
 
@@ -154,12 +163,13 @@ router.get("/destacados", async (req, res) => {
  */
 router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
   try {
-    const { recetaId, costoEmpaque, markupPct } = req.body || {};
+    const { recetaId, costoEmpaque, cantidadReceta, markupPct } = req.body || {};
     if (!recetaId) return res.status(400).json({ message: "recetaId es requerido" });
 
     const data = await calcularDesglosePostre({
       recetaId,
       costoEmpaque,
+      cantidadReceta,
       markupPctOverride: typeof markupPct === "number" ? markupPct : undefined,
     });
     res.json({ message: "Precio calculado", data });

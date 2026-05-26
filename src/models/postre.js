@@ -37,13 +37,23 @@ const postreSchema = new mongoose.Schema(
 
     // ── Costeo opcional desde receta ──────────────────────────────
     // Si `recetaId` está presente, el sistema puede sugerir un precio
-    // basado en (receta.total_cost / receta.portions) + branding global
-    // + empaque de este postre + markup. Es informativo — el admin
+    // basado en (receta.total_cost / receta.portions) × cantidadReceta
+    // + branding global + empaque + markup. Es informativo — el admin
     // puede usar el sugerido o setear `precio` manualmente.
     recetaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Receta",
       default: null,
+    },
+    // Cuántas unidades de la receta consume un postre. Default 1 (un
+    // postre = 1 porción/pieza). Permite postres como "Rosca de naranja"
+    // que usa 20 porciones de una receta que rinde 40 porciones, o un
+    // "Bote de mermelada" que usa 100g de una receta que rinde 500g.
+    // La unidad la dicta `receta.unidadRendimiento`.
+    cantidadReceta: {
+      type: Number,
+      default: 1,
+      min: [0, "La cantidad no puede ser negativa"],
     },
     // Empaque varía por postre (domo, caja, base de cartón, etc.).
     // Se suma al costo unitario antes de aplicar el markup.
