@@ -1,6 +1,40 @@
 const mongoose = require("mongoose");
 const Ingrediente = require("./ingrediente"); // Importar el modelo de Ingrediente
 
+/**
+ * Sub-receta: una receta que se usa como ingrediente intermedio de otra.
+ *
+ * Ej: la receta "Pan de naranja con maracuyá" usa 50g de la sub-receta
+ * "Mermelada de maracuyá". El costo se calcula como:
+ *     (mermelada.total_cost / mermelada.portions) × 50
+ *
+ * Guardamos snapshots (nombre, unidad, costo unitario) para que la
+ * receta padre tenga la info al render sin tener que populate cada vez.
+ * Si la sub-receta cambia DESPUÉS de guardarse en el padre, el padre
+ * queda con info stale hasta que el admin lo re-guarde. Esto es honesto:
+ * el admin sabe que si modifica una receta base, debe re-guardar las
+ * recetas que dependen de ella.
+ */
+const subRecetaSchema = new mongoose.Schema(
+  {
+    recetaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Receta",
+      required: true,
+    },
+    cantidad: {
+      type: Number,
+      required: true,
+      min: [0, "Cantidad no puede ser negativa"],
+    },
+    // Snapshots al momento de guardar la receta padre.
+    nombreSnapshot:        { type: String, default: "" },
+    unidadSnapshot:        { type: String, default: "porcion" },
+    costoUnitarioSnapshot: { type: Number, default: 0 }, // = total_cost / portions
+  },
+  { _id: false }
+);
+
 const recetaSchema = new mongoose.Schema(
   {
     nombre_receta: {
@@ -12,6 +46,23 @@ const recetaSchema = new mongoose.Schema(
       required: [true, "La descripción es obligatoria"],
     },
     ingredientes: [Ingrediente.schema], // Array de ingredientes usando el schema del modelo
+
+    // Recetas usadas como ingredientes intermedios (ej. mermelada dentro
+    // de un postre compuesto). Cada item aporta:
+    //   costoUnitarioSnapshot × cantidad
+    // al total_cost calculado en el front.
+    subRecetas: { type: [subRecetaSchema], default: [] },
+
+    // Unidad del rendimiento. "porcion" para postres regulares (default
+    // legacy); "gramos"/"ml" para preparaciones intermedias como
+    // mermeladas o salsas; "pieza" para sub-recetas que rinden por unidad
+    // (ej. "Galletas decoradas", rinde 12 piezas).
+    unidadRendimiento: {
+      type: String,
+      enum: ["porcion", "gramos", "ml", "pieza"],
+      default: "porcion",
+    },
+
     profit_margin: {
       type: Number,
       required: [true, "El margen de ganancia es obligatorio"],
