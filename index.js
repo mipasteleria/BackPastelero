@@ -11,6 +11,7 @@ const checkRoleToken = require("./src/middlewares/myRoleToken.js");
 const { requireAuth } = checkRoleToken;
 const mongoDB = require("./src/database/db.js");
 const { startReminderCron } = require("./src/jobs/reminderCron");
+const { startImagenesCleanupCron, runImagenesCleanup } = require("./src/jobs/imagenesCleanup");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
 const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
@@ -358,6 +359,29 @@ app.get("/image-url/:filename", async (req, res) => {
   }
 });
 
+/**
+ * POST /jobs/cleanup-imagenes — dispara la limpieza de imágenes de
+ * cotizaciones personalizadas. Pensado para Vercel Cron (donde node-cron
+ * no corre de forma confiable). Protegido por CRON_SECRET: se acepta
+ * vía header `Authorization: Bearer <secret>` o `?secret=<secret>`.
+ * Acepta GET (Vercel Cron sólo hace GET) y POST.
+ */
+app.all("/jobs/cleanup-imagenes", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const provided =
+    req.headers.authorization?.replace(/^Bearer\s+/i, "") || req.query.secret;
+  if (!secret || provided !== secret) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+  try {
+    const result = await runImagenesCleanup();
+    res.json({ message: "Limpieza ejecutada", ...result });
+  } catch (e) {
+    console.error("[/jobs/cleanup-imagenes] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
@@ -370,6 +394,7 @@ if (!process.env.VERCEL) {
     .then((message) => {
       console.log(message);
       startReminderCron();
+      startImagenesCleanupCron();
       app.listen(port, () => {
         console.log("Server is listening on port", port);
       });

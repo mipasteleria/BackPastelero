@@ -55,7 +55,7 @@ async function snapshotRelleno(slug) {
     catalogoId: r._id,
     slug: r.slug,
     nombre: r.nombre,
-    costoSnapshot: r.costoPorPorcion ?? 0,
+    costoSnapshot: r.costoUnitarioSnapshot ?? r.costoPorPorcion ?? 0,
   };
 }
 
@@ -67,7 +67,7 @@ async function snapshotCobertura(slug) {
     catalogoId: c._id,
     slug: c.slug,
     nombre: c.nombre,
-    costoSnapshot: c.costoPorPorcion ?? 0,
+    costoSnapshot: c.costoUnitarioSnapshot ?? c.costoPorPorcion ?? 0,
     esFondant: !!c.esFondant,
   };
 }
@@ -100,6 +100,10 @@ router.post("/", async (req, res) => {
       snapshotDecoraciones(body.decoracionesSlugs || []),
     ]);
 
+    // Validez: 30 días desde el envío. Visible al cliente.
+    const VALIDEZ_DIAS = 30;
+    const validUntil = new Date(Date.now() + VALIDEZ_DIAS * 86400000);
+
     const doc = await CotizacionPersonalizada.create({
       evento: body.evento,
       niveles: body.niveles,
@@ -112,6 +116,7 @@ router.post("/", async (req, res) => {
       entrega: body.entrega || {},
       cliente: body.cliente,
       userId: body.userId || "",
+      validUntil,
     });
 
     res.status(201).json({ message: "Cotización creada", data: doc });
@@ -250,10 +255,23 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     let costoRelleno = 0;
     let rellenoDetalle = null;
     if (cot.relleno?.catalogoId) {
-      const rel = await RellenoCotiza.findById(cot.relleno.catalogoId);
+      const rel = await RellenoCotiza.findById(cot.relleno.catalogoId).populate("recetaId");
       if (rel) {
-        costoRelleno = round2((rel.costoPorPorcion || 0) * inv * mult);
-        rellenoDetalle = { slug: rel.slug, nombre: rel.nombre, costoUnitario: rel.costoPorPorcion };
+        let unitario = 0;
+        let fuente = "manual";
+        if (rel.recetaId && rel.recetaId.portions > 0) {
+          unitario = rel.recetaId.total_cost / rel.recetaId.portions;
+          fuente = "receta";
+        } else {
+          unitario = rel.costoUnitarioSnapshot ?? rel.costoPorPorcion ?? 0;
+        }
+        costoRelleno = round2(unitario * inv * mult);
+        rellenoDetalle = {
+          slug: rel.slug, nombre: rel.nombre,
+          costoUnitario: round2(unitario), fuente,
+          recetaId: rel.recetaId?._id || null,
+          recetaNombre: rel.recetaId?.nombre_receta || null,
+        };
       }
     }
 
@@ -261,12 +279,22 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     let costoCobertura = 0;
     let coberturaDetalle = null;
     if (cot.cobertura?.catalogoId) {
-      const cob = await CoberturaCotiza.findById(cot.cobertura.catalogoId);
+      const cob = await CoberturaCotiza.findById(cot.cobertura.catalogoId).populate("recetaId");
       if (cob) {
-        costoCobertura = round2((cob.costoPorPorcion || 0) * inv * mult);
+        let unitario = 0;
+        let fuente = "manual";
+        if (cob.recetaId && cob.recetaId.portions > 0) {
+          unitario = cob.recetaId.total_cost / cob.recetaId.portions;
+          fuente = "receta";
+        } else {
+          unitario = cob.costoUnitarioSnapshot ?? cob.costoPorPorcion ?? 0;
+        }
+        costoCobertura = round2(unitario * inv * mult);
         coberturaDetalle = {
           slug: cob.slug, nombre: cob.nombre,
-          costoUnitario: cob.costoPorPorcion, esFondant: cob.esFondant,
+          costoUnitario: round2(unitario), fuente, esFondant: cob.esFondant,
+          recetaId: cob.recetaId?._id || null,
+          recetaNombre: cob.recetaId?.nombre_receta || null,
         };
       }
     }

@@ -94,6 +94,16 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
       email:   { type: String, default: "", trim: true, lowercase: true },
     },
 
+    // ── Validez de la cotización ─────────────────────────────────
+    // La cotización es válida 30 días desde el envío. Se muestra al
+    // cliente y la usa el job de limpieza de imágenes (las cotizaciones
+    // NO compradas borran sus imágenes 1 semana después de vencer).
+    validUntil: { type: Date, default: null },
+
+    // Marca de cuándo se limpiaron las imágenes de inspiración (para
+    // que el job no reprocese la misma cotización).
+    imagenesEliminadasAt: { type: Date, default: null },
+
     // ── Admin metadata ───────────────────────────────────────────
     status: { type: String, default: "Pendiente" },
     userId: { type: String, default: "" }, // si vino de un cliente loggeado

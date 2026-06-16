@@ -10,5 +10,11 @@
       "src": "/(.*)",
       "dest": "/index.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/jobs/cleanup-imagenes",
+      "schedule": "0 3 * * *"
+    }
   ]
 }
