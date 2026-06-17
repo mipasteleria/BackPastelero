@@ -109,6 +109,9 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
       email:   { type: String, default: "", trim: true, lowercase: true },
     },
 
+    // Número de orden legible (PAS-/CUP-/SNA-...). Se genera al crear.
+    numeroOrden: { type: String, default: "" },
+
     // ── Enlace público (invitado) ────────────────────────────────
     // Token aleatorio para compartir la cotización por WhatsApp sin que
     // el cliente necesite cuenta. El front lo abre en /cotizacion/ver/:token.

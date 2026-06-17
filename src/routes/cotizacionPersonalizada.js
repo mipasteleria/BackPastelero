@@ -13,6 +13,17 @@ const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
 const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
+const nodemailer = require("nodemailer");
+const { generarNumeroOrden } = require("../utils/orderNumber");
+
+// Datos bancarios para anticipo por transferencia (se envían por correo).
+const DATOS_BANCARIOS = {
+  banco: "Citibanamex",
+  clabe: "002320902695222820",
+  tarjeta: "5256 7839 9715 6998",
+};
+
+const PREFIJO_ORDEN = { pastel: "PAS", cupcake: "CUP", "mesa-postres": "SNA" };
 
 // Multiplicador de complejidad por número de pisos. Mismo valor que usa
 // el front en cakePersonalizado.jsx para que el estimado del cliente
@@ -124,6 +135,14 @@ router.post("/", async (req, res) => {
       publicToken: crypto.randomBytes(16).toString("hex"),
     };
 
+    // Número de orden legible (no rompe la creación si el contador falla).
+    try {
+      const { numeroOrden } = await generarNumeroOrden(PREFIJO_ORDEN[tipoProducto] || "PAS");
+      base.numeroOrden = numeroOrden;
+    } catch (e) {
+      console.error("No se pudo generar numeroOrden:", e.message);
+    }
+
     let doc;
     if (tipoProducto === "mesa-postres") {
       const postres = await snapshotPostres(body.postresSlugs || []);
@@ -209,6 +228,11 @@ router.post("/public/:token/confirmar", async (req, res) => {
     });
     await doc.save();
 
+    // Correo al cliente: para transferencia incluye los datos bancarios.
+    enviarCorreoConfirmacion(doc, metodo).catch((e) =>
+      console.error("Error enviando correo de confirmación:", e.message)
+    );
+
     res.json({ message: "Confirmación registrada", data: { confirmado: true, metodo } });
   } catch (e) {
     console.error("Error confirmando cotización pública:", e);
@@ -222,10 +246,19 @@ router.post("/:id/generar-enlace", checkRoleToken("admin"), async (req, res) => 
   try {
     const doc = await CotizacionPersonalizada.findById(req.params.id);
     if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
+    let cambio = false;
     if (!doc.publicToken) {
       doc.publicToken = crypto.randomBytes(16).toString("hex");
-      await doc.save();
+      cambio = true;
     }
+    if (!doc.numeroOrden) {
+      try {
+        const { numeroOrden } = await generarNumeroOrden(PREFIJO_ORDEN[doc.tipoProducto] || "PAS");
+        doc.numeroOrden = numeroOrden;
+        cambio = true;
+      } catch (e) { console.error("No se pudo generar numeroOrden:", e.message); }
+    }
+    if (cambio) await doc.save();
     res.json({ message: "Enlace listo", data: { publicToken: doc.publicToken } });
   } catch (e) {
     res.status(400).json({ message: e.message });
@@ -533,5 +566,61 @@ router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
     res.status(400).json({ message: e.message });
   }
 });
+
+// ── Correo de confirmación al cliente ─────────────────────────────
+async function enviarCorreoConfirmacion(cot, metodo) {
+  const to = cot.cliente?.email;
+  if (!to) return; // sin correo no hay a quién enviar
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+  });
+
+  const precio = Number(cot.precio) || 0;
+  const anticipo = cot.anticipo != null ? Number(cot.anticipo) : Math.round(precio * 0.5);
+  const fechaEntrega = cot.evento?.fecha
+    ? new Date(cot.evento.fecha).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" })
+    : "Por confirmar";
+
+  const detallesPedido = cot.tipoProducto === "mesa-postres"
+    ? `Mesa de postres · ${cot.evento?.invitados} personas · ${(cot.postres || []).map((p) => p.nombre).join(", ")}`
+    : `${cot.tipoProducto === "cupcake" ? "Cupcakes" : "Pastel"} para ${cot.evento?.invitados} porciones · ` +
+      `Pan: ${cot.sabor?.nombre || "—"} · Relleno: ${cot.relleno?.nombre || "—"} · Cobertura: ${cot.cobertura?.nombre || "—"}`;
+
+  const bloqueBanco = metodo === "transferencia"
+    ? `
+      <h3 style="color:#540027;margin:16px 0 6px">Datos para tu transferencia (anticipo 50%)</h3>
+      <p style="margin:0"><strong>Banco:</strong> ${DATOS_BANCARIOS.banco}</p>
+      <p style="margin:0"><strong>CLABE:</strong> ${DATOS_BANCARIOS.clabe}</p>
+      <p style="margin:0"><strong>No. de Tarjeta:</strong> ${DATOS_BANCARIOS.tarjeta}</p>
+      <p style="margin:8px 0 0">Anticipo a depositar: <strong>$${anticipo.toLocaleString("es-MX")} MXN</strong>.
+      Cuando realices la transferencia, envíanos el comprobante por WhatsApp citando tu número de orden
+      <strong>${cot.numeroOrden || ""}</strong>.</p>`
+    : `
+      <p style="margin:8px 0 0">Coordinaremos contigo el pago del anticipo
+      (<strong>$${anticipo.toLocaleString("es-MX")} MXN</strong>) en efectivo.
+      Tu número de orden es <strong>${cot.numeroOrden || ""}</strong>.</p>`;
+
+  await transporter.sendMail({
+    from: `Pastelería el Ruiseñor <${process.env.EMAIL_USER}>`,
+    to,
+    subject: `Confirmación de tu pedido ${cot.numeroOrden || ""} 🎂`,
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#3a3a3a;max-width:560px">
+        <h2 style="color:#540027">¡Gracias por confirmar tu pedido, ${cot.cliente?.nombre || ""}!</h2>
+        <p>Estos son los detalles de tu pedido:</p>
+        <p style="margin:0"><strong>Número de orden:</strong> ${cot.numeroOrden || "—"}</p>
+        <p style="margin:0"><strong>Fecha de entrega:</strong> ${fechaEntrega}</p>
+        <p style="margin:0"><strong>Detalle:</strong> ${detallesPedido}</p>
+        <p style="margin:6px 0 0"><strong>Total:</strong> $${precio.toLocaleString("es-MX")} MXN ·
+          <strong>Anticipo (50%):</strong> $${anticipo.toLocaleString("es-MX")} MXN</p>
+        ${bloqueBanco}
+        <p style="margin-top:16px;font-size:13px;color:#888">
+          Horario de atención: Lunes a Viernes de 9am a 6pm. Cualquier duda, estamos al pendiente. 🌸
+        </p>
+      </div>`,
+  });
+}
 
 module.exports = router;
