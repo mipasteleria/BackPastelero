@@ -1,5 +1,28 @@
 const express = require("express");
 const checkRoleToken = require("../../middlewares/myRoleToken");
+const Receta = require("../../models/recetas/recetas");
+
+/**
+ * Si el catálogo soporta costeo por receta, recalcula y congela el costo
+ * unitario por porción al guardar (para que el catálogo muestre el costo
+ * sin necesidad de pulsar "Recostear"). Si se quita la receta, limpia el
+ * snapshot para que vuelva a usarse el costo manual.
+ */
+async function autoCostearReceta(doc) {
+  if (!doc) return;
+  if (!doc.recetaId) {
+    doc.costoUnitarioSnapshot = null;
+    doc.fechaCosteoSnapshot = null;
+    await doc.save();
+    return;
+  }
+  const receta = await Receta.findById(doc.recetaId);
+  if (receta && receta.portions > 0) {
+    doc.costoUnitarioSnapshot = Math.round((receta.total_cost / receta.portions) * 100) / 100;
+    doc.fechaCosteoSnapshot = new Date();
+    await doc.save();
+  }
+}
 
 /**
  * Factory de un router CRUD estándar para los 4 catálogos de cotización
@@ -21,7 +44,7 @@ const checkRoleToken = require("../../middlewares/myRoleToken");
  *  - camposEditables: array de strings whitelist
  *  - populate (opcional): array de paths a popular en GET
  */
-function crudFactory({ Model, camposEditables, populate = [] }) {
+function crudFactory({ Model, camposEditables, populate = [], recostearReceta = false }) {
   const router = express.Router();
 
   const pickEditables = (body) => {
@@ -68,6 +91,7 @@ function crudFactory({ Model, camposEditables, populate = [] }) {
     try {
       const data = pickEditables(req.body);
       const doc = await Model.create(data);
+      if (recostearReceta) await autoCostearReceta(doc);
       res.status(201).json({ message: `${Model.modelName} creado`, data: doc });
     } catch (e) {
       if (e.code === 11000) {
@@ -86,6 +110,11 @@ function crudFactory({ Model, camposEditables, populate = [] }) {
         runValidators: true,
       });
       if (!doc) return res.status(404).json({ message: `${Model.modelName} no encontrado` });
+      // Recostear sólo si el guardado tocó la receta (evita pisar un
+      // snapshot recosteado a mano cuando se edita otro campo).
+      if (recostearReceta && Object.prototype.hasOwnProperty.call(data, "recetaId")) {
+        await autoCostearReceta(doc);
+      }
       res.json({ message: `${Model.modelName} actualizado`, data: doc });
     } catch (e) {
       if (e.code === 11000) {

@@ -26,6 +26,7 @@ const router = crudFactory({
     "orden",
   ],
   populate: ["recetaId"],
+  recostearReceta: true,
 });
 
 /**

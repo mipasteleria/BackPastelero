@@ -22,6 +22,7 @@ const router = crudFactory({
     "orden",
   ],
   populate: ["recetaId"],
+  recostearReceta: true,
 });
 
 router.post("/:id/recostear", checkRoleToken("admin"), async (req, res) => {
