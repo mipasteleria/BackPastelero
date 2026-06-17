@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 const CotizacionPersonalizada = require("../models/cotizacionPersonalizada");
 const SaborCotiza = require("../models/cotizacionCatalogos/sabor");
@@ -120,6 +121,7 @@ router.post("/", async (req, res) => {
       cliente: body.cliente,
       userId: body.userId || "",
       validUntil,
+      publicToken: crypto.randomBytes(16).toString("hex"),
     };
 
     let doc;
@@ -168,6 +170,65 @@ router.get("/", requireAuth, async (req, res) => {
   } catch (e) {
     console.error("Error listando cotizaciones personalizadas:", e);
     res.status(500).json({ message: e.message });
+  }
+});
+
+// ── Enlace público por token (invitado, sin login) ───────────────
+//
+// Devuelve solo campos seguros para que el cliente vea su cotización y
+// precio sin necesidad de cuenta. NUNCA expone notas internas, costeo ni
+// userId.
+
+const PROJ_PUBLICA =
+  "-notasInternas -costeoSnapshot -costeoExtras -userId -__v";
+
+router.get("/public/:token", async (req, res) => {
+  try {
+    const doc = await CotizacionPersonalizada.findOne({ publicToken: req.params.token }).select(PROJ_PUBLICA);
+    if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
+    res.json({ data: doc });
+  } catch (e) {
+    console.error("Error obteniendo cotización pública:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// El cliente confirma que pagará el anticipo por transferencia/efectivo.
+router.post("/public/:token/confirmar", async (req, res) => {
+  try {
+    const metodo = ["transferencia", "efectivo"].includes(req.body?.metodo)
+      ? req.body.metodo
+      : "transferencia";
+    const doc = await CotizacionPersonalizada.findOne({ publicToken: req.params.token });
+    if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
+
+    doc.confirmacionCliente = { confirmado: true, metodo, fecha: new Date() };
+    doc.notasInternas.push({
+      texto: `El cliente confirmó su pedido y pagará el anticipo por ${metodo}.`,
+      autorNombre: "Cliente (enlace público)",
+    });
+    await doc.save();
+
+    res.json({ message: "Confirmación registrada", data: { confirmado: true, metodo } });
+  } catch (e) {
+    console.error("Error confirmando cotización pública:", e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
+// Admin: asegura que la cotización tenga publicToken y lo devuelve (sirve
+// para cotizaciones creadas antes de existir el campo).
+router.post("/:id/generar-enlace", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const doc = await CotizacionPersonalizada.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
+    if (!doc.publicToken) {
+      doc.publicToken = crypto.randomBytes(16).toString("hex");
+      await doc.save();
+    }
+    res.json({ message: "Enlace listo", data: { publicToken: doc.publicToken } });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
   }
 });
 

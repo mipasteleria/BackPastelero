@@ -109,6 +109,18 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
       email:   { type: String, default: "", trim: true, lowercase: true },
     },
 
+    // ── Enlace público (invitado) ────────────────────────────────
+    // Token aleatorio para compartir la cotización por WhatsApp sin que
+    // el cliente necesite cuenta. El front lo abre en /cotizacion/ver/:token.
+    publicToken: { type: String, default: null, index: true },
+
+    // Confirmación del cliente cuando elige pagar por transferencia/efectivo.
+    confirmacionCliente: {
+      confirmado: { type: Boolean, default: false },
+      metodo:     { type: String, default: "" }, // "transferencia" | "efectivo"
+      fecha:      { type: Date, default: null },
+    },
+
     // ── Validez de la cotización ─────────────────────────────────
     // La cotización es válida 30 días desde el envío. Se muestra al
     // cliente y la usa el job de limpieza de imágenes (las cotizaciones
