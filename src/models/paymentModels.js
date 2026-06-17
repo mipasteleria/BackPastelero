@@ -20,7 +20,7 @@ const mongoose = require("mongoose");
  */
 const PAYMENT_STATUSES = ["pending", "paid", "failed", "expired"];
 const PAYMENT_OPTIONS = ["anticipo", "total", "saldo"];
-const COTIZA_TYPES = ["Pastel", "Cupcake", "Snack"];
+const COTIZA_TYPES = ["Pastel", "Cupcake", "Snack", "Personalizada"];
 
 const PaymentSchema = new mongoose.Schema(
   {

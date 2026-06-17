@@ -7,6 +7,7 @@ const Payment = require("../../models/paymentModels");
 const Pastel = require("../../models/pastelCotiza");
 const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
+const Personalizada = require("../../models/cotizacionPersonalizada");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
 const PostrePedido  = require("../../models/postrePedido");
@@ -44,6 +45,8 @@ function getCotizaModel(type) {
       return Cupcake;
     case "Snack":
       return Snack;
+    case "Personalizada":
+      return Personalizada;
     default:
       return null;
   }
@@ -82,14 +85,18 @@ async function markPaymentFinal(session, finalStatus) {
   const precio = Number(cotizacion.precio) || 0;
   const anticipo = Number(cotizacion.anticipo) || 0;
 
+  // Las cotizaciones personalizadas usan su propio set de estados; al pagar
+  // el anticipo o total pasan directo a "Agendado · producción".
+  const esPersonalizada = payment.cotizacionType === "Personalizada";
+
   if (payment.paymentOption === "total") {
-    cotizacion.status = "Agendado con el 100%";
+    cotizacion.status = esPersonalizada ? "Agendado · producción" : "Agendado con el 100%";
     cotizacion.saldoPendiente = 0;
   } else if (payment.paymentOption === "anticipo") {
-    cotizacion.status = "Agendado con el 50%";
+    cotizacion.status = esPersonalizada ? "Agendado · producción" : "Agendado con el 50%";
     cotizacion.saldoPendiente = Math.max(precio - anticipo, 0);
   } else if (payment.paymentOption === "saldo") {
-    cotizacion.status = "Agendado con el 100%";
+    cotizacion.status = esPersonalizada ? "Agendado · producción" : "Agendado con el 100%";
     cotizacion.saldoPendiente = 0;
   }
   await cotizacion.save();
@@ -98,7 +105,7 @@ async function markPaymentFinal(session, finalStatus) {
   // Solo si la cotización aún no tiene calendarEventId (evita
   // duplicados cuando paga primero anticipo y después saldo).
   // En su propio try/catch para no romper el webhook si Calendar falla.
-  if (!cotizacion.calendarEventId) {
+  if (!cotizacion.calendarEventId && !esPersonalizada) {
     try {
       const eventId = await createCotizacionEvent(cotizacion, payment.cotizacionType);
       if (eventId) {

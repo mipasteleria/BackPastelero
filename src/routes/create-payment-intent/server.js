@@ -9,6 +9,7 @@ const Payment = require("../../models/paymentModels");
 const Pastel = require("../../models/pastelCotiza");
 const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
+const Personalizada = require("../../models/cotizacionPersonalizada");
 
 const { PAYMENT_OPTIONS, COTIZA_TYPES } = Payment;
 
@@ -25,10 +26,114 @@ function getCotizaModel(type) {
       return Cupcake;
     case "Snack":
       return Snack;
+    case "Personalizada":
+      return Personalizada;
     default:
       return null;
   }
 }
+
+/**
+ * POST /checkout/create-checkout-session-public
+ *
+ * Checkout para cotizaciones personalizadas vía enlace de invitado (sin
+ * login). Autoriza por `publicToken` — quien tiene el enlace puede pagar.
+ * Usa Stripe Checkout hosted (redirección) para no requerir sesión auth en
+ * el cliente. Soporta paymentOption "anticipo" (50%) y "saldo".
+ *
+ * Body: { token, paymentOption }
+ */
+router.post("/create-checkout-session-public", async (req, res) => {
+  try {
+    const { token, paymentOption } = req.body;
+    if (!token || !paymentOption) {
+      return res.status(400).json({ message: "Faltan campos: token, paymentOption" });
+    }
+    if (!["anticipo", "saldo", "total"].includes(paymentOption)) {
+      return res.status(400).json({ message: "paymentOption inválido" });
+    }
+
+    const cot = await Personalizada.findOne({ publicToken: token });
+    if (!cot) return res.status(404).json({ message: "Cotización no encontrada" });
+
+    const precio = Number(cot.precio);
+    if (!precio || precio <= 0) {
+      return res.status(400).json({ message: "La cotización aún no tiene precio definido" });
+    }
+
+    // Anticipo: usar el del admin o, si falta, 50% del precio (y persistir
+    // para que el webhook calcule bien el saldo).
+    let anticipoMonto = Number(cot.anticipo);
+    if (!anticipoMonto || anticipoMonto <= 0) {
+      anticipoMonto = Math.round(precio * 0.5 * 100) / 100;
+      cot.anticipo = anticipoMonto;
+      await cot.save();
+    }
+
+    const cotizacionType = "Personalizada";
+    const previosPaid = await Payment.find({ cotizacionId: cot._id, cotizacionType, status: "paid" });
+    const anticipoPagado = previosPaid.find((p) => p.paymentOption === "anticipo");
+    const totalPagado = previosPaid.find((p) => p.paymentOption === "total" || p.paymentOption === "saldo");
+
+    let amount;
+    if (paymentOption === "total") {
+      if (totalPagado || anticipoPagado) return res.status(409).json({ message: "Esta cotización ya tiene pagos." });
+      amount = precio;
+    } else if (paymentOption === "anticipo") {
+      if (anticipoPagado) return res.status(409).json({ message: "El anticipo ya fue pagado. Usa 'saldo'." });
+      amount = anticipoMonto;
+    } else { // saldo
+      if (!anticipoPagado) return res.status(409).json({ message: "No existe anticipo previo." });
+      if (totalPagado) return res.status(409).json({ message: "Ya está totalmente pagada." });
+      amount = precio - anticipoMonto;
+      if (amount <= 0) return res.status(400).json({ message: "Saldo no positivo." });
+    }
+
+    const productLabel = `Cotización personalizada (${paymentOption})`;
+    const returnTo = `${FRONT_DOMAIN}/cotizacion/ver/${token}?pago=ok`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      locale: "es",
+      customer_email: cot.cliente?.email || undefined,
+      line_items: [
+        {
+          price_data: {
+            currency: "mxn",
+            product_data: { name: productLabel },
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: returnTo,
+      cancel_url: `${FRONT_DOMAIN}/cotizacion/ver/${token}?pago=cancelado`,
+      metadata: {
+        cotizacionId: String(cot._id),
+        cotizacionType,
+        paymentOption,
+        userId: cot.userId || "",
+      },
+    });
+
+    await Payment.create({
+      stripeSessionId: session.id,
+      cotizacionId: cot._id,
+      cotizacionType,
+      paymentOption,
+      amount,
+      status: "pending",
+      userId: cot.userId || "",
+      email: cot.cliente?.email || "",
+      name: cot.cliente?.nombre || "",
+    });
+
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error("Error creando checkout público:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
 
 // Redirige al dominio frontal (endpoint legacy, se mantiene)
 router.get("/", (req, res) => {
