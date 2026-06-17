@@ -132,6 +132,26 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // POST /cotizacion-personalizada/:id/calcular-costeo (Fase D)
     costeoSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
 
+    // Renglones extra que el admin agrega manualmente al costeo, encima
+    // de la base automática (estructura, técnicas, insumos, recetas o un
+    // costo libre). Se suman al costoTotal en /calcular-costeo.
+    costeoExtras: {
+      type: [
+        new mongoose.Schema(
+          {
+            tipo: { type: String, enum: ["receta", "tecnica", "insumo", "manual"], default: "manual" },
+            refId: { type: mongoose.Schema.Types.ObjectId, default: null },
+            concepto: { type: String, default: "" },
+            costoUnitario: { type: Number, default: 0 },
+            cantidad: { type: Number, default: 1 },
+            subtotal: { type: Number, default: 0 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
     // Evento de Google Calendar (si la cotización se agenda)
     calendarEventId: { type: String, default: "" },
     reminderSentAt:  { type: Date },

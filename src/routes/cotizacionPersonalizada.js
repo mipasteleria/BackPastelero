@@ -243,6 +243,16 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     const cot = await CotizacionPersonalizada.findById(req.params.id);
     if (!cot) return res.status(404).json({ message: "Cotización no encontrada" });
 
+    // Renglones extra que el admin agregó a mano — se suman a la base.
+    const extras = (cot.costeoExtras || []).map((x) => ({
+      tipo: x.tipo,
+      concepto: x.concepto,
+      costoUnitario: round2(x.costoUnitario || 0),
+      cantidad: x.cantidad || 1,
+      subtotal: round2(x.subtotal || 0),
+    }));
+    const costoExtras = round2(extras.reduce((acc, x) => acc + (x.subtotal || 0), 0));
+
     const inv     = Math.max(1, Number(cot.evento?.invitados) || 0);
     const niveles = cot.niveles || 1;
     const mult    = MULTIPLICADOR_NIVELES[niveles] ?? 1;
@@ -285,7 +295,8 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         });
       }
       costoPostres = round2(costoPostres);
-      const precioSugeridoMesa = round2(costoPostres * (1 + markup / 100));
+      const costoTotalMesa = round2(costoPostres + costoExtras);
+      const precioSugeridoMesa = round2(costoTotalMesa * (1 + markup / 100));
 
       const snapshotMesa = {
         fechaCosteo: new Date(),
@@ -295,10 +306,12 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         piezasTotales,
         postres: postresDetalle,
         costoPostres,
-        costoTotal: costoPostres,
+        extras,
+        costoExtras,
+        costoTotal: costoTotalMesa,
         markupPct: markup,
         precioSugerido: precioSugeridoMesa,
-        gananciaNeta: round2(precioSugeridoMesa - costoPostres),
+        gananciaNeta: round2(precioSugeridoMesa - costoTotalMesa),
       };
 
       cot.costeoSnapshot = snapshotMesa;
@@ -409,7 +422,8 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     costoDecoraciones = round2(costoDecoraciones);
 
     // ── Totales ──────────────────────────────────────────────────
-    const costoTotal     = round2(costoBizcocho + costoRelleno + costoCobertura + costoDecoraciones);
+    const costoBase      = round2(costoBizcocho + costoRelleno + costoCobertura + costoDecoraciones);
+    const costoTotal     = round2(costoBase + costoExtras);
     const precioSugerido = round2(costoTotal * (1 + markup / 100));
     const gananciaNeta   = round2(precioSugerido - costoTotal);
 
@@ -427,6 +441,9 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       costoCobertura,
       decoraciones: decoracionesDetalle,
       costoDecoraciones,
+      extras,
+      costoExtras,
+      costoBase,
       costoTotal,
       markupPct: markup,
       precioSugerido,
