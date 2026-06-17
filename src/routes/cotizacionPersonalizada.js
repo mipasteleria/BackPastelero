@@ -5,6 +5,7 @@ const SaborCotiza = require("../models/cotizacionCatalogos/sabor");
 const RellenoCotiza = require("../models/cotizacionCatalogos/relleno");
 const CoberturaCotiza = require("../models/cotizacionCatalogos/cobertura");
 const DecoracionCotiza = require("../models/cotizacionCatalogos/decoracion");
+const PostreCotiza = require("../models/cotizacionCatalogos/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const checkRoleToken = require("../middlewares/myRoleToken");
@@ -86,38 +87,66 @@ async function snapshotDecoraciones(slugs) {
   }));
 }
 
+async function snapshotPostres(slugs) {
+  if (!Array.isArray(slugs) || slugs.length === 0) return [];
+  const docs = await PostreCotiza.find({ slug: { $in: slugs }, activo: true });
+  return docs.map((p) => ({
+    catalogoId: p._id,
+    slug: p.slug,
+    nombre: p.nombre,
+    costoSnapshot: p.costoUnitarioSnapshot ?? p.costoManual ?? 0,
+  }));
+}
+
 // ── POST público — crear nueva cotización ─────────────────────────
 
 router.post("/", async (req, res) => {
   try {
     const body = req.body || {};
-
-    // Resolver snapshots de catálogo en paralelo.
-    const [sabor, relleno, cobertura, decoraciones] = await Promise.all([
-      snapshotSabor(body.saborSlug),
-      snapshotRelleno(body.rellenoSlug),
-      snapshotCobertura(body.coberturaSlug),
-      snapshotDecoraciones(body.decoracionesSlugs || []),
-    ]);
+    const tipoProducto = ["pastel", "cupcake", "mesa-postres"].includes(body.tipoProducto)
+      ? body.tipoProducto
+      : "pastel";
 
     // Validez: 30 días desde el envío. Visible al cliente.
     const VALIDEZ_DIAS = 30;
     const validUntil = new Date(Date.now() + VALIDEZ_DIAS * 86400000);
 
-    const doc = await CotizacionPersonalizada.create({
+    const base = {
+      tipoProducto,
       evento: body.evento,
-      niveles: body.niveles,
-      sabor,
-      relleno,
-      cobertura,
       colorPrincipal: body.colorPrincipal || "",
-      decoraciones,
       estilo: body.estilo || {},
       entrega: body.entrega || {},
       cliente: body.cliente,
       userId: body.userId || "",
       validUntil,
-    });
+    };
+
+    let doc;
+    if (tipoProducto === "mesa-postres") {
+      const postres = await snapshotPostres(body.postresSlugs || []);
+      doc = await CotizacionPersonalizada.create({
+        ...base,
+        postresPorPersona: body.postresPorPersona || 1,
+        postres,
+      });
+    } else {
+      // pastel y cupcake comparten los mismos catálogos.
+      const [sabor, relleno, cobertura, decoraciones] = await Promise.all([
+        snapshotSabor(body.saborSlug),
+        snapshotRelleno(body.rellenoSlug),
+        snapshotCobertura(body.coberturaSlug),
+        snapshotDecoraciones(body.decoracionesSlugs || []),
+      ]);
+      doc = await CotizacionPersonalizada.create({
+        ...base,
+        niveles: tipoProducto === "cupcake" ? 1 : (body.niveles || 1),
+        sabor,
+        relleno,
+        cobertura,
+        decoraciones,
+      });
+    }
 
     res.status(201).json({ message: "Cotización creada", data: doc });
   } catch (e) {
@@ -224,6 +253,58 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       ? req.body.markupPct
       : (cfg?.markupCotizacionesPct ?? cfg?.markupPostresPct ?? 60);
     const tarifaHora = cfg?.laborCosts ?? 0;
+
+    // ── Mesa de postres ──────────────────────────────────────────
+    // Costo estimado: total de piezas = personas × postres por persona,
+    // repartidas equitativamente entre los postres elegidos.
+    if (cot.tipoProducto === "mesa-postres") {
+      const piezasTotales = inv * (cot.postresPorPersona || 1);
+      const ids = (cot.postres || []).map((p) => p.catalogoId).filter(Boolean);
+      const docs = await PostreCotiza.find({ _id: { $in: ids } }).populate("recetaId");
+      const piezasPorTipo = docs.length > 0 ? piezasTotales / docs.length : 0;
+
+      const postresDetalle = [];
+      let costoPostres = 0;
+      for (const p of docs) {
+        let unitario = 0;
+        let fuente = "manual";
+        if (p.recetaId && p.recetaId.portions > 0) {
+          unitario = p.recetaId.total_cost / p.recetaId.portions;
+          fuente = "receta";
+        } else {
+          unitario = p.costoUnitarioSnapshot ?? p.costoManual ?? 0;
+        }
+        const costo = round2(unitario * piezasPorTipo);
+        costoPostres += costo;
+        postresDetalle.push({
+          slug: p.slug, nombre: p.nombre,
+          costoUnitario: round2(unitario), piezas: Math.round(piezasPorTipo),
+          costo, fuente,
+          recetaId: p.recetaId?._id || null,
+          recetaNombre: p.recetaId?.nombre_receta || null,
+        });
+      }
+      costoPostres = round2(costoPostres);
+      const precioSugeridoMesa = round2(costoPostres * (1 + markup / 100));
+
+      const snapshotMesa = {
+        fechaCosteo: new Date(),
+        tipoProducto: "mesa-postres",
+        personas: inv,
+        postresPorPersona: cot.postresPorPersona || 1,
+        piezasTotales,
+        postres: postresDetalle,
+        costoPostres,
+        costoTotal: costoPostres,
+        markupPct: markup,
+        precioSugerido: precioSugeridoMesa,
+        gananciaNeta: round2(precioSugeridoMesa - costoPostres),
+      };
+
+      cot.costeoSnapshot = snapshotMesa;
+      await cot.save();
+      return res.json({ message: "Costeo calculado", data: snapshotMesa });
+    }
 
     // ── Bizcocho ─────────────────────────────────────────────────
     let costoBizcocho = 0;

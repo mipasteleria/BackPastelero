@@ -12,10 +12,12 @@ const router = express.Router();
  *   /cotizacion-catalogos/rellenos
  *   /cotizacion-catalogos/coberturas
  *   /cotizacion-catalogos/decoraciones
+ *   /cotizacion-catalogos/postres
  */
 router.use("/sabores",      require("./sabores"));
 router.use("/rellenos",     require("./rellenos"));
 router.use("/coberturas",   require("./coberturas"));
 router.use("/decoraciones", require("./decoraciones"));
+router.use("/postres",      require("./postres"));
 
 module.exports = router;

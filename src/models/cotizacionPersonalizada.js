@@ -40,6 +40,15 @@ const seleccionCatalogoSnap = new mongoose.Schema(
 
 const cotizacionPersonalizadaSchema = new mongoose.Schema(
   {
+    // ── Tipo de producto ─────────────────────────────────────────
+    // "pastel" (default, comportamiento histórico), "cupcake" (mismos
+    // catálogos que el pastel) o "mesa-postres" (catálogo de postres).
+    tipoProducto: {
+      type: String,
+      enum: ["pastel", "cupcake", "mesa-postres"],
+      default: "pastel",
+    },
+
     // ── 1. Evento ────────────────────────────────────────────────
     evento: {
       tipo:      { type: String, required: true },  // "boda" | "xv" | "cumple" | ...
@@ -47,8 +56,14 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
       invitados: { type: Number, required: true, min: 1 },
     },
 
-    // ── 2. Niveles del pastel ────────────────────────────────────
-    niveles: { type: Number, required: true, min: 1, max: 6, default: 1 },
+    // ── 2. Niveles del pastel (solo pastel) ──────────────────────
+    niveles: { type: Number, min: 1, max: 6, default: 1 },
+
+    // ── Mesa de postres ──────────────────────────────────────────
+    // El cliente elige nº de personas (= evento.invitados) y cuántos
+    // postres por persona; `postres` es el multi-select del catálogo.
+    postresPorPersona: { type: Number, default: 1, min: 1 },
+    postres: { type: [seleccionCatalogoSnap], default: [] },
 
     // ── 3. Sabor del bizcocho ────────────────────────────────────
     sabor: { type: seleccionCatalogoSnap, default: null },
