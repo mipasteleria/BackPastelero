@@ -128,7 +128,8 @@ router.post("/", async (req, res) => {
       evento: body.evento,
       colorPrincipal: body.colorPrincipal || "",
       estilo: body.estilo || {},
-      entrega: body.entrega || {},
+      // La entrega es el mismo día del evento (fuente única de la fecha).
+      entrega: { ...(body.entrega || {}), fecha: body.evento?.fecha || (body.entrega || {}).fecha || null },
       cliente: body.cliente,
       userId: body.userId || "",
       validUntil,
@@ -352,6 +353,11 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(body, "postresSlugs")) {
       update.postres = await snapshotPostres(body.postresSlugs || []);
       delete update.postresSlugs;
+    }
+
+    // La fecha de entrega siempre es la del evento.
+    if (update.evento?.fecha) {
+      update.entrega = { ...(update.entrega || {}), fecha: update.evento.fecha };
     }
 
     const doc = await CotizacionPersonalizada.findByIdAndUpdate(
