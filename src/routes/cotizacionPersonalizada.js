@@ -328,9 +328,35 @@ router.get("/:id", async (req, res) => {
 
 router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
+    const body = req.body || {};
+    const update = { ...body };
+
+    // Si el admin manda slugs de catálogo (edición completa), reconstruimos
+    // los snapshots — igual que al crear — y quitamos las claves *Slug.
+    if (Object.prototype.hasOwnProperty.call(body, "saborSlug")) {
+      update.sabor = await snapshotSabor(body.saborSlug);
+      delete update.saborSlug;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "rellenoSlug")) {
+      update.relleno = await snapshotRelleno(body.rellenoSlug);
+      delete update.rellenoSlug;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "coberturaSlug")) {
+      update.cobertura = await snapshotCobertura(body.coberturaSlug);
+      delete update.coberturaSlug;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "decoracionesSlugs")) {
+      update.decoraciones = await snapshotDecoraciones(body.decoracionesSlugs || []);
+      delete update.decoracionesSlugs;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, "postresSlugs")) {
+      update.postres = await snapshotPostres(body.postresSlugs || []);
+      delete update.postresSlugs;
+    }
+
     const doc = await CotizacionPersonalizada.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      update,
       { new: true, runValidators: true }
     );
     if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
