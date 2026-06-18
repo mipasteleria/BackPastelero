@@ -7,6 +7,9 @@ const RellenoCotiza = require("../models/cotizacionCatalogos/relleno");
 const CoberturaCotiza = require("../models/cotizacionCatalogos/cobertura");
 const DecoracionCotiza = require("../models/cotizacionCatalogos/decoracion");
 const PostreCotiza = require("../models/cotizacionCatalogos/postre");
+const PastelLegacy = require("../models/pastelCotiza");
+const CupcakeLegacy = require("../models/cupcakesCotiza");
+const SnackLegacy = require("../models/snackCotiza");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const checkRoleToken = require("../middlewares/myRoleToken");
@@ -618,6 +621,152 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
   } catch (e) {
     console.error("Error calculando costeo:", e);
     res.status(400).json({ message: e.message });
+  }
+});
+
+// ── Migración de cotizaciones legacy → personalizada (admin) ──────
+//
+// No destructivo: crea una CotizacionPersonalizada por cada registro
+// legacy (pastel/cupcake/snack) que aún no se haya migrado (dedupe por
+// legacyRef.id). El legacy NO se borra.
+
+function parseDeliveryDate(s) {
+  // Formatos: "DD/MM/YYYY" o "DD/MM/YYYY HH:MM".
+  if (!s) return { fecha: null, hora: "" };
+  const m = String(s).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  if (!m) return { fecha: null, hora: "" };
+  const [, dd, mm, yyyy, hh, mi] = m;
+  const fecha = new Date(Date.UTC(+yyyy, +mm - 1, +dd));
+  const hora = hh ? `${String(hh).padStart(2, "0")}:${mi}` : "";
+  return { fecha, hora };
+}
+
+function mapStatusLegacy(s) {
+  const t = String(s || "").toLowerCase();
+  if (/100|50|agendad/.test(t)) return "Agendado · producción";
+  if (/entreg/.test(t)) return "Entregado";
+  if (/cancel/.test(t)) return "Cancelado";
+  if (/cotiz/.test(t)) return "Cotizada";
+  return "Pendiente";
+}
+
+function imagenesLegacy(images, apiBase) {
+  if (!Array.isArray(images)) return [];
+  return images.filter(Boolean).map((x) =>
+    /^https?:\/\//.test(x) ? x : `${apiBase}/file/${x}`
+  );
+}
+
+function snapsDesdeBooleans(doc, mapa) {
+  const out = [];
+  for (const [campo, nombre] of mapa) if (doc[campo]) out.push({ nombre });
+  if (doc.other) out.push({ nombre: String(doc.other) });
+  return out;
+}
+
+const DECO_PASTEL = [
+  ["fondantCover", "Cubierta de fondant"], ["fondantDraw", "Dibujos en fondant"],
+  ["fondantFlowers", "Flores de fondant"], ["naturalFlowers", "Flores naturales"],
+  ["buttercreamDraw", "Dibujos en buttercream"], ["eatablePrint", "Impresión comestible"],
+  ["sign", "Topper / letrero"], ["character", "Personaje"],
+];
+const DECO_CUPCAKE = [
+  ["fondantCover", "Cubierta de fondant"], ["fondantDraw", "Dibujos en fondant"],
+  ["buttercreamDraw", "Dibujos en buttercream"], ["naturalFlowers", "Flores naturales"],
+  ["eatablePrint", "Impresión comestible"], ["sign", "Toppers con texto"],
+  ["sprinkles", "Sprinkles"],
+];
+const POSTRES_MESA = [
+  ["pay", "Pay de queso"], ["brownie", "Brownie"], ["coockie", "Galletas decoradas"],
+  ["alfajores", "Alfajores"], ["macaroni", "Macarrones"], ["donuts", "Donas"],
+  ["lollipops", "Paletas"], ["cupcakes", "Cupcakes"], ["bread", "Pan de naranja"],
+  ["tortaFruts", "Torta de frutas"], ["americanCoockies", "Galletas americanas"],
+  ["tortaApple", "Torta de manzana"],
+];
+
+function comentariosLegacy(doc) {
+  const partes = [];
+  if (doc.questionsOrComments) partes.push(String(doc.questionsOrComments));
+  if (doc.budget) partes.push(`Presupuesto indicado: ${doc.budget}`);
+  return partes.join(" · ");
+}
+
+async function migrarUno(doc, tipo, apiBase) {
+  const { fecha, hora } = parseDeliveryDate(doc.deliveryDate);
+  const eventoFecha = fecha || new Date();
+  const tipoProducto = tipo === "snack" ? "mesa-postres" : tipo;
+  const invitados = Math.max(1, parseInt(tipo === "snack" ? doc.people : doc.portions, 10) || 1);
+
+  const base = {
+    tipoProducto,
+    legacyRef: { tipo, id: doc._id },
+    evento: { tipo: "otro", fecha: eventoFecha, invitados },
+    colorPrincipal: "",
+    estilo: { value: "", comentarios: comentariosLegacy(doc), imagenesInspiracion: imagenesLegacy(doc.images, apiBase) },
+    entrega: {
+      tipo: doc.delivery ? "domicilio" : "recoger-local",
+      fecha: eventoFecha,
+      hora,
+      direccion: doc.deliveryAdress || "",
+    },
+    cliente: {
+      nombre: doc.contactName || "Cliente",
+      telefono: doc.contactPhone || "0000000000",
+      email: "",
+    },
+    userId: doc.userId || "",
+    status: mapStatusLegacy(doc.status),
+    precio: doc.precio,
+    anticipo: doc.anticipo,
+    saldoPendiente: doc.saldoPendiente || 0,
+    validUntil: new Date((doc.createdAt ? new Date(doc.createdAt).getTime() : Date.now()) + 30 * 86400000),
+    publicToken: crypto.randomBytes(16).toString("hex"),
+  };
+
+  if (tipoProducto === "mesa-postres") {
+    base.postresPorPersona = Math.max(1, parseInt(doc.portionsPerPerson, 10) || 1);
+    base.postres = snapsDesdeBooleans(doc, POSTRES_MESA);
+  } else {
+    base.niveles = tipo === "cupcake" ? 1 : Math.max(1, parseInt(doc.levels, 10) || 1);
+    base.sabor = (doc.flavor || doc.flavorBizcocho) ? { nombre: doc.flavor || doc.flavorBizcocho } : null;
+    base.relleno = doc.stuffedFlavor ? { nombre: doc.stuffedFlavor } : null;
+    base.cobertura = doc.cover ? { nombre: doc.cover, esFondant: !!(doc.fondant || doc.fondantCover) } : null;
+    base.decoraciones = snapsDesdeBooleans(doc, tipo === "cupcake" ? DECO_CUPCAKE : DECO_PASTEL);
+  }
+
+  try {
+    const { numeroOrden } = await generarNumeroOrden(PREFIJO_ORDEN[tipoProducto] || "PAS");
+    base.numeroOrden = numeroOrden;
+  } catch (_) {}
+
+  return CotizacionPersonalizada.create(base);
+}
+
+router.post("/migrar-legacy", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const apiBase = process.env.API_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
+    const lotes = [
+      { tipo: "pastel", docs: await PastelLegacy.find() },
+      { tipo: "cupcake", docs: await CupcakeLegacy.find() },
+      { tipo: "snack", docs: await SnackLegacy.find() },
+    ];
+    const resumen = { migradas: 0, omitidas: 0, errores: [] };
+    for (const { tipo, docs } of lotes) {
+      for (const doc of docs) {
+        const yaExiste = await CotizacionPersonalizada.exists({ "legacyRef.id": doc._id });
+        if (yaExiste) { resumen.omitidas++; continue; }
+        try {
+          await migrarUno(doc, tipo, apiBase);
+          resumen.migradas++;
+        } catch (e) {
+          resumen.errores.push({ tipo, id: String(doc._id), error: e.message });
+        }
+      }
+    }
+    res.json({ message: "Migración completada", ...resumen });
+  } catch (e) {
+    console.error("Error migrando legacy:", e);
+    res.status(500).json({ message: e.message });
   }
 });
 

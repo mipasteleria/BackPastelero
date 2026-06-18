@@ -112,6 +112,12 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // Número de orden legible (PAS-/CUP-/SNA-...). Se genera al crear.
     numeroOrden: { type: String, default: "" },
 
+    // Referencia al registro legacy del que se migró (dedupe de migración).
+    legacyRef: {
+      tipo: { type: String, default: "" },   // "pastel" | "cupcake" | "snack"
+      id:   { type: mongoose.Schema.Types.ObjectId, default: null },
+    },
+
     // ── Enlace público (invitado) ────────────────────────────────
     // Token aleatorio para compartir la cotización por WhatsApp sin que
     // el cliente necesite cuenta. El front lo abre en /cotizacion/ver/:token.
