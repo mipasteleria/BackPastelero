@@ -240,6 +240,41 @@ router.post("/public/:token/confirmar", async (req, res) => {
   }
 });
 
+// El cliente solicita ajustes a su cotización (desde el enlace público).
+router.post("/public/:token/solicitar-ajuste", async (req, res) => {
+  try {
+    const mensaje = String(req.body?.mensaje || "").trim();
+    if (!mensaje) return res.status(400).json({ message: "Escribe tu solicitud de ajuste" });
+    const doc = await CotizacionPersonalizada.findOne({ publicToken: req.params.token });
+    if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
+
+    doc.notasInternas.push({
+      texto: `Solicitud de ajuste del cliente: ${mensaje}`,
+      autorNombre: "Cliente (enlace público)",
+    });
+    await doc.save();
+
+    // Aviso al admin (best-effort).
+    try {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
+      });
+      await transporter.sendMail({
+        from: `Pastelería el Ruiseñor <${process.env.EMAIL_USER}>`,
+        to: process.env.EMAIL_USER,
+        subject: `Solicitud de ajuste · ${doc.numeroOrden || doc._id}`,
+        text: `${doc.cliente?.nombre || "Cliente"} solicitó ajustes en su cotización ${doc.numeroOrden || doc._id}:\n\n${mensaje}`,
+      });
+    } catch (e) { console.error("Error correo ajuste:", e.message); }
+
+    res.json({ message: "Solicitud enviada" });
+  } catch (e) {
+    console.error("Error solicitando ajuste:", e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
 // Admin: asegura que la cotización tenga publicToken y lo devuelve (sirve
 // para cotizaciones creadas antes de existir el campo).
 router.post("/:id/generar-enlace", checkRoleToken("admin"), async (req, res) => {
