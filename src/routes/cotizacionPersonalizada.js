@@ -102,6 +102,25 @@ async function snapshotDecoraciones(slugs) {
   }));
 }
 
+// Cupcakes: resuelve [{saborSlug, docenas}] a snapshots con docenas.
+async function snapshotSaboresCupcake(filas) {
+  if (!Array.isArray(filas) || filas.length === 0) return [];
+  const out = [];
+  for (const f of filas) {
+    if (!f?.saborSlug) continue;
+    const s = await SaborCotiza.findOne({ slug: f.saborSlug, activo: true });
+    if (!s) continue;
+    out.push({
+      catalogoId: s._id,
+      slug: s.slug,
+      nombre: s.nombre,
+      costoSnapshot: s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? null,
+      docenas: Math.max(1, Number(f.docenas) || 1),
+    });
+  }
+  return out;
+}
+
 async function snapshotPostres(slugs) {
   if (!Array.isArray(slugs) || slugs.length === 0) return [];
   const docs = await PostreCotiza.find({ slug: { $in: slugs }, activo: true });
@@ -157,19 +176,30 @@ router.post("/", async (req, res) => {
       });
     } else {
       // pastel y cupcake comparten los mismos catálogos.
-      const [sabor, relleno, cobertura, decoraciones] = await Promise.all([
-        snapshotSabor(body.saborSlug),
+      const [relleno, cobertura, decoraciones] = await Promise.all([
         snapshotRelleno(body.rellenoSlug),
         snapshotCobertura(body.coberturaSlug),
         snapshotDecoraciones(body.decoracionesSlugs || []),
       ]);
+      const extra = {};
+      if (tipoProducto === "cupcake") {
+        // Sabor por docena; el total de cupcakes = Σ docenas × 12.
+        extra.saboresCupcake = await snapshotSaboresCupcake(body.saboresCupcakeData || []);
+        const totalCupcakes = extra.saboresCupcake.reduce((a, r) => a + r.docenas, 0) * 12;
+        if (totalCupcakes > 0) base.evento = { ...base.evento, invitados: totalCupcakes };
+        extra.sabor = extra.saboresCupcake[0]
+          ? { catalogoId: extra.saboresCupcake[0].catalogoId, slug: extra.saboresCupcake[0].slug, nombre: extra.saboresCupcake[0].nombre, costoSnapshot: extra.saboresCupcake[0].costoSnapshot }
+          : null;
+      } else {
+        extra.sabor = await snapshotSabor(body.saborSlug);
+      }
       doc = await CotizacionPersonalizada.create({
         ...base,
         niveles: tipoProducto === "cupcake" ? 1 : (body.niveles || 1),
-        sabor,
         relleno,
         cobertura,
         decoraciones,
+        ...extra,
       });
     }
 
@@ -357,6 +387,16 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
       update.postres = await snapshotPostres(body.postresSlugs || []);
       delete update.postresSlugs;
     }
+    if (Object.prototype.hasOwnProperty.call(body, "saboresCupcakeData")) {
+      const sc = await snapshotSaboresCupcake(body.saboresCupcakeData || []);
+      update.saboresCupcake = sc;
+      update.sabor = sc[0]
+        ? { catalogoId: sc[0].catalogoId, slug: sc[0].slug, nombre: sc[0].nombre, costoSnapshot: sc[0].costoSnapshot }
+        : null;
+      const totalCupcakes = sc.reduce((a, r) => a + r.docenas, 0) * 12;
+      if (totalCupcakes > 0) update.evento = { ...(update.evento || {}), invitados: totalCupcakes };
+      delete update.saboresCupcakeData;
+    }
 
     // La fecha de entrega siempre es la del evento.
     if (update.evento?.fecha) {
@@ -486,7 +526,27 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     // ── Bizcocho ─────────────────────────────────────────────────
     let costoBizcocho = 0;
     let bizcochoDetalle = null;
-    if (cot.sabor?.catalogoId) {
+    // Cupcakes: costo por sabor/docena = Σ (unitario × docenas × 12).
+    if (cot.tipoProducto === "cupcake" && (cot.saboresCupcake || []).length) {
+      const detalles = [];
+      for (const fila of cot.saboresCupcake) {
+        let unitario = 0;
+        if (fila.catalogoId) {
+          const s = await SaborCotiza.findById(fila.catalogoId).populate("recetaId");
+          if (s) {
+            unitario = (s.recetaId && s.recetaId.portions > 0)
+              ? s.recetaId.total_cost / s.recetaId.portions
+              : (s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? 0);
+          }
+        }
+        const piezas = (fila.docenas || 0) * 12;
+        const costo = round2(unitario * piezas * mult);
+        costoBizcocho += costo;
+        detalles.push({ slug: fila.slug, nombre: fila.nombre, docenas: fila.docenas, costoUnitario: round2(unitario), costo });
+      }
+      costoBizcocho = round2(costoBizcocho);
+      bizcochoDetalle = { porSabor: detalles };
+    } else if (cot.sabor?.catalogoId) {
       const sabor = await SaborCotiza.findById(cot.sabor.catalogoId).populate("recetaId");
       if (sabor) {
         let unitario = 0;

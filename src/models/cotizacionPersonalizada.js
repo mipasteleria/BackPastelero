@@ -68,6 +68,23 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // ── 3. Sabor del bizcocho ────────────────────────────────────
     sabor: { type: seleccionCatalogoSnap, default: null },
 
+    // Cupcakes: sabor por docena (ej. 2 doc vainilla + 2 doc chocolate).
+    saboresCupcake: {
+      type: [
+        new mongoose.Schema(
+          {
+            catalogoId: { type: mongoose.Schema.Types.ObjectId },
+            slug: { type: String },
+            nombre: { type: String },
+            costoSnapshot: { type: Number, default: null },
+            docenas: { type: Number, default: 1, min: 1 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
     // ── 4. Sabor del relleno ─────────────────────────────────────
     relleno: { type: seleccionCatalogoSnap, default: null },
 
