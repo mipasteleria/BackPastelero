@@ -166,6 +166,11 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     anticipo:       { type: Number },
     saldoPendiente: { type: Number, default: 0 },
 
+    // Confirmación manual del anticipo por el admin (cuando lo registra a
+    // mano al pasar a "Agendado · producción").
+    anticipoMetodo:     { type: String, default: "" }, // "transferencia" | "efectivo" | "otro"
+    anticipoReferencia: { type: String, default: "" }, // folio, nota, etc.
+
     // Snapshot del cálculo automático — se llena con
     // POST /cotizacion-personalizada/:id/calcular-costeo (Fase D)
     costeoSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
