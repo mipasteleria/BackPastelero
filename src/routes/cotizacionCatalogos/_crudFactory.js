@@ -47,10 +47,15 @@ async function autoCostearReceta(doc) {
 function crudFactory({ Model, camposEditables, populate = [], recostearReceta = false }) {
   const router = express.Router();
 
+  // Campos ObjectId: un "" del <select> vacío debe guardarse como null,
+  // si no Mongoose lanza CastError y la creación/edición falla.
+  const OBJECTID_FIELDS = new Set(["recetaId", "tecnicaCreativaId"]);
   const pickEditables = (body) => {
     const out = {};
     for (const k of camposEditables) {
-      if (Object.prototype.hasOwnProperty.call(body || {}, k)) out[k] = body[k];
+      if (Object.prototype.hasOwnProperty.call(body || {}, k)) {
+        out[k] = OBJECTID_FIELDS.has(k) && body[k] === "" ? null : body[k];
+      }
     }
     return out;
   };
