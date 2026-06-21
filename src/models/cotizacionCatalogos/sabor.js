@@ -52,6 +52,7 @@ const saborSchema = new mongoose.Schema(
     // sabor puede marcarse para ambos si la receta sirve igual).
     paraPastel:  { type: Boolean, default: true },
     paraCupcake: { type: Boolean, default: false },
+    paraVintage: { type: Boolean, default: false },
 
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },

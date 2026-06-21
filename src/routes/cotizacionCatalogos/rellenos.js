@@ -18,6 +18,7 @@ const router = crudFactory({
     "descripcion",
     "recetaId",
     "costoPorPorcion",
+    "paraVintage",
     "activo",
     "orden",
   ],

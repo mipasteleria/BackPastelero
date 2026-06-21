@@ -40,6 +40,9 @@ const rellenoSchema = new mongoose.Schema(
     // Fallback: costo manual por porción — el admin lo ajusta a mano.
     costoPorPorcion: { type: Number, default: 0, min: 0 },
 
+    // Aplica también al pastel vintage (además de pastel/cupcake).
+    paraVintage: { type: Boolean, default: false },
+
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
   },

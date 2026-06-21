@@ -106,6 +106,7 @@ app.use("/postrePedidos", postrePedidosRoutes);
 app.use("/resenas", resenasRoutes);
 app.use("/cotizacion-catalogos", cotizacionCatalogosRoutes);
 app.use("/cotizacion-personalizada", cotizacionPersonalizadaRoutes);
+app.use("/vintage-catalogos", require("./src/routes/vintage"));
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });

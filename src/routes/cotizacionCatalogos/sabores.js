@@ -24,6 +24,7 @@ const router = crudFactory({
     "costoManualPorPorcion",
     "paraPastel",
     "paraCupcake",
+    "paraVintage",
     "activo",
     "orden",
   ],

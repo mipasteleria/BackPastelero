@@ -41,6 +41,9 @@ const coberturaSchema = new mongoose.Schema(
     // mostrar el toggle/pictograma especial de la maqueta.
     esFondant: { type: Boolean, default: false },
 
+    // Aplica también al pastel vintage.
+    paraVintage: { type: Boolean, default: false },
+
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
   },
