@@ -607,24 +607,43 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       }
     }
 
-    // ── Cobertura ────────────────────────────────────────────────
+    // ── Cobertura (por gramos: 500 g/docena cupcakes · 500 g/10 porciones) ──
+    // Gramos base editables por el admin (cot.coberturaGramos).
+    const coberturaGramosBase = cot.tipoProducto === "cupcake"
+      ? Math.round((inv / 12) * 500)   // inv = total cupcakes
+      : Math.round((inv / 10) * 500);  // pastel: por porciones
+    const coberturaGramos = (cot.coberturaGramos != null && cot.coberturaGramos !== "")
+      ? Number(cot.coberturaGramos)
+      : coberturaGramosBase;
+
     let costoCobertura = 0, precioCobertura = 0, coberturaDetalle = null;
     if (cot.cobertura?.catalogoId) {
       const cob = await CoberturaCotiza.findById(cot.cobertura.catalogoId).populate("recetaId");
       if (cob) {
-        let unitario = 0, margenPct = markup, fuente = "manual";
+        let margenPct = markup, fuente = "manual";
+        let costoPorGramo = 0;     // costo de la receta por gramo
+        let usaGramos = false;
         if (cob.recetaId && cob.recetaId.portions > 0) {
-          unitario = cob.recetaId.total_cost / cob.recetaId.portions;
+          // La receta de cobertura rinde `portions` gramos → costo por gramo.
+          costoPorGramo = cob.recetaId.total_cost / cob.recetaId.portions;
           margenPct = cob.recetaId.profit_margin ?? markup;
           fuente = "receta";
-        } else {
-          unitario = cob.costoUnitarioSnapshot ?? cob.costoPorPorcion ?? 0;
+          usaGramos = true;
         }
-        costoCobertura = round2(unitario * inv * mult);
+        if (usaGramos) {
+          costoCobertura = round2(costoPorGramo * coberturaGramos * mult);
+        } else {
+          // Sin receta: costo manual por porción (comportamiento previo).
+          const unitario = cob.costoUnitarioSnapshot ?? cob.costoPorPorcion ?? 0;
+          costoCobertura = round2(unitario * inv * mult);
+        }
         precioCobertura = precioConMargen(costoCobertura, margenPct);
         coberturaDetalle = {
           slug: cob.slug, nombre: cob.nombre,
-          costoUnitario: round2(unitario), fuente, margenPct, precio: precioCobertura, esFondant: cob.esFondant,
+          fuente, margenPct, precio: precioCobertura, esFondant: cob.esFondant,
+          gramos: usaGramos ? coberturaGramos : null,
+          gramosBase: usaGramos ? coberturaGramosBase : null,
+          costoPorGramo: usaGramos ? round2(costoPorGramo) : null,
           recetaId: cob.recetaId?._id || null,
           recetaNombre: cob.recetaId?.nombre_receta || null,
         };

@@ -90,6 +90,9 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
 
     // ── 5. Cobertura ─────────────────────────────────────────────
     cobertura:      { type: seleccionCatalogoSnap, default: null },
+    // Gramos de cobertura para el costeo (editable por el admin). Si es null,
+    // se usa la base: 500 g por docena de cupcakes / 500 g por 10 porciones.
+    coberturaGramos: { type: Number, default: null },
     colorPrincipal: { type: String, default: "" }, // hex "#FFC9D4" o nombre
 
     // ── 6. Decoraciones (multi-select) ───────────────────────────
