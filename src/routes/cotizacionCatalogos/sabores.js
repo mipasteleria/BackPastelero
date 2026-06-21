@@ -22,6 +22,8 @@ const router = crudFactory({
     "emoji",
     "recetaId",
     "costoManualPorPorcion",
+    "paraPastel",
+    "paraCupcake",
     "activo",
     "orden",
   ],

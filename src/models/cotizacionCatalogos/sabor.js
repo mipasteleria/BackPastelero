@@ -47,6 +47,12 @@ const saborSchema = new mongoose.Schema(
     // dice "este pan me cuesta ~X por porción".
     costoManualPorPorcion: { type: Number, default: 0, min: 0 },
 
+    // A qué productos aplica este sabor. La receta del bizcocho del pastel
+    // y la del cupcake suelen diferir, por eso se elige por separado (un
+    // sabor puede marcarse para ambos si la receta sirve igual).
+    paraPastel:  { type: Boolean, default: true },
+    paraCupcake: { type: Boolean, default: false },
+
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
   },
