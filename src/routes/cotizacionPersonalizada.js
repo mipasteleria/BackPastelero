@@ -477,30 +477,34 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       const docs = await PostreCotiza.find({ _id: { $in: ids } }).populate("recetaId");
       const piezasPorTipo = docs.length > 0 ? piezasTotales / docs.length : 0;
 
+      const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100));
       const postresDetalle = [];
-      let costoPostres = 0;
+      let costoPostres = 0, precioPostres = 0;
       for (const p of docs) {
-        let unitario = 0;
-        let fuente = "manual";
+        let unitario = 0, margenPct = markup, fuente = "manual";
         if (p.recetaId && p.recetaId.portions > 0) {
           unitario = p.recetaId.total_cost / p.recetaId.portions;
+          margenPct = p.recetaId.profit_margin ?? markup;
           fuente = "receta";
         } else {
           unitario = p.costoUnitarioSnapshot ?? p.costoManual ?? 0;
         }
         const costo = round2(unitario * piezasPorTipo);
-        costoPostres += costo;
+        const precio = precioConMargen(costo, margenPct);
+        costoPostres += costo; precioPostres += precio;
         postresDetalle.push({
           slug: p.slug, nombre: p.nombre,
           costoUnitario: round2(unitario), piezas: Math.round(piezasPorTipo),
-          costo, fuente,
+          costo, margenPct, precio, fuente,
           recetaId: p.recetaId?._id || null,
           recetaNombre: p.recetaId?.nombre_receta || null,
         });
       }
       costoPostres = round2(costoPostres);
+      precioPostres = round2(precioPostres);
       const costoTotalMesa = round2(costoPostres + costoExtras);
-      const precioSugeridoMesa = round2(costoTotalMesa * (1 + markup / 100));
+      const precioExtrasMesa = precioConMargen(costoExtras, markup);
+      const precioSugeridoMesa = round2(precioPostres + precioExtrasMesa);
 
       const snapshotMesa = {
         fechaCosteo: new Date(),
@@ -509,9 +513,9 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         postresPorPersona: cot.postresPorPersona || 1,
         piezasTotales,
         postres: postresDetalle,
-        costoPostres,
+        costoPostres, precioPostres,
         extras,
-        costoExtras,
+        costoExtras, precioExtras: precioExtrasMesa,
         costoTotal: costoTotalMesa,
         markupPct: markup,
         precioSugerido: precioSugeridoMesa,
@@ -523,46 +527,56 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       return res.json({ message: "Costeo calculado", data: snapshotMesa });
     }
 
+    // Precio = costo × (1 + margen). Cada elemento con receta usa el margen
+    // de SU receta (profit_margin); los demás usan el markup global. Así no
+    // se dobla la ganancia que ya trae la receta.
+    const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100));
+
     // ── Bizcocho ─────────────────────────────────────────────────
     let costoBizcocho = 0;
+    let precioBizcocho = 0;
     let bizcochoDetalle = null;
-    // Cupcakes: costo por sabor/docena = Σ (unitario × docenas × 12).
     if (cot.tipoProducto === "cupcake" && (cot.saboresCupcake || []).length) {
       const detalles = [];
       for (const fila of cot.saboresCupcake) {
-        let unitario = 0;
+        let unitario = 0, margenPct = markup, fuente = "manual", recetaNombre = null;
         if (fila.catalogoId) {
           const s = await SaborCotiza.findById(fila.catalogoId).populate("recetaId");
           if (s) {
-            unitario = (s.recetaId && s.recetaId.portions > 0)
-              ? s.recetaId.total_cost / s.recetaId.portions
-              : (s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? 0);
+            if (s.recetaId && s.recetaId.portions > 0) {
+              unitario = s.recetaId.total_cost / s.recetaId.portions;
+              margenPct = s.recetaId.profit_margin ?? markup;
+              fuente = "receta"; recetaNombre = s.recetaId.nombre_receta;
+            } else {
+              unitario = s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? 0;
+            }
           }
         }
         const piezas = (fila.docenas || 0) * 12;
         const costo = round2(unitario * piezas * mult);
-        costoBizcocho += costo;
-        detalles.push({ slug: fila.slug, nombre: fila.nombre, docenas: fila.docenas, costoUnitario: round2(unitario), costo });
+        const precio = precioConMargen(costo, margenPct);
+        costoBizcocho += costo; precioBizcocho += precio;
+        detalles.push({ slug: fila.slug, nombre: fila.nombre, docenas: fila.docenas, costoUnitario: round2(unitario), costo, margenPct, precio, fuente, recetaNombre });
       }
       costoBizcocho = round2(costoBizcocho);
+      precioBizcocho = round2(precioBizcocho);
       bizcochoDetalle = { porSabor: detalles };
     } else if (cot.sabor?.catalogoId) {
       const sabor = await SaborCotiza.findById(cot.sabor.catalogoId).populate("recetaId");
       if (sabor) {
-        let unitario = 0;
-        let fuente = "manual";
+        let unitario = 0, margenPct = markup, fuente = "manual";
         if (sabor.recetaId && sabor.recetaId.portions > 0) {
           unitario = sabor.recetaId.total_cost / sabor.recetaId.portions;
+          margenPct = sabor.recetaId.profit_margin ?? markup;
           fuente = "receta";
         } else {
           unitario = sabor.costoUnitarioSnapshot ?? sabor.costoManualPorPorcion ?? 0;
         }
         costoBizcocho = round2(unitario * inv * mult);
+        precioBizcocho = precioConMargen(costoBizcocho, margenPct);
         bizcochoDetalle = {
-          slug: sabor.slug,
-          nombre: sabor.nombre,
-          costoUnitario: round2(unitario),
-          fuente,
+          slug: sabor.slug, nombre: sabor.nombre,
+          costoUnitario: round2(unitario), fuente, margenPct, precio: precioBizcocho,
           recetaId: sabor.recetaId?._id || null,
           recetaNombre: sabor.recetaId?.nombre_receta || null,
         };
@@ -570,23 +584,23 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     }
 
     // ── Relleno ──────────────────────────────────────────────────
-    let costoRelleno = 0;
-    let rellenoDetalle = null;
+    let costoRelleno = 0, precioRelleno = 0, rellenoDetalle = null;
     if (cot.relleno?.catalogoId) {
       const rel = await RellenoCotiza.findById(cot.relleno.catalogoId).populate("recetaId");
       if (rel) {
-        let unitario = 0;
-        let fuente = "manual";
+        let unitario = 0, margenPct = markup, fuente = "manual";
         if (rel.recetaId && rel.recetaId.portions > 0) {
           unitario = rel.recetaId.total_cost / rel.recetaId.portions;
+          margenPct = rel.recetaId.profit_margin ?? markup;
           fuente = "receta";
         } else {
           unitario = rel.costoUnitarioSnapshot ?? rel.costoPorPorcion ?? 0;
         }
         costoRelleno = round2(unitario * inv * mult);
+        precioRelleno = precioConMargen(costoRelleno, margenPct);
         rellenoDetalle = {
           slug: rel.slug, nombre: rel.nombre,
-          costoUnitario: round2(unitario), fuente,
+          costoUnitario: round2(unitario), fuente, margenPct, precio: precioRelleno,
           recetaId: rel.recetaId?._id || null,
           recetaNombre: rel.recetaId?.nombre_receta || null,
         };
@@ -594,37 +608,36 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     }
 
     // ── Cobertura ────────────────────────────────────────────────
-    let costoCobertura = 0;
-    let coberturaDetalle = null;
+    let costoCobertura = 0, precioCobertura = 0, coberturaDetalle = null;
     if (cot.cobertura?.catalogoId) {
       const cob = await CoberturaCotiza.findById(cot.cobertura.catalogoId).populate("recetaId");
       if (cob) {
-        let unitario = 0;
-        let fuente = "manual";
+        let unitario = 0, margenPct = markup, fuente = "manual";
         if (cob.recetaId && cob.recetaId.portions > 0) {
           unitario = cob.recetaId.total_cost / cob.recetaId.portions;
+          margenPct = cob.recetaId.profit_margin ?? markup;
           fuente = "receta";
         } else {
           unitario = cob.costoUnitarioSnapshot ?? cob.costoPorPorcion ?? 0;
         }
         costoCobertura = round2(unitario * inv * mult);
+        precioCobertura = precioConMargen(costoCobertura, margenPct);
         coberturaDetalle = {
           slug: cob.slug, nombre: cob.nombre,
-          costoUnitario: round2(unitario), fuente, esFondant: cob.esFondant,
+          costoUnitario: round2(unitario), fuente, margenPct, precio: precioCobertura, esFondant: cob.esFondant,
           recetaId: cob.recetaId?._id || null,
           recetaNombre: cob.recetaId?.nombre_receta || null,
         };
       }
     }
 
-    // ── Decoraciones ─────────────────────────────────────────────
+    // ── Decoraciones (sin receta → markup global) ────────────────
     const decoIds = (cot.decoraciones || []).map((d) => d.catalogoId).filter(Boolean);
     const decoDocs = await DecoracionCotiza.find({ _id: { $in: decoIds } }).populate("tecnicaCreativaId");
     const decoracionesDetalle = [];
-    let costoDecoraciones = 0;
+    let costoDecoraciones = 0, precioDecoraciones = 0;
     for (const d of decoDocs) {
-      let costo = 0;
-      let fuente = "manual";
+      let costo = 0, fuente = "manual";
       if (d.tecnicaCreativaId) {
         const t = d.tecnicaCreativaId;
         costo = (t.costoBase || 0) + (t.escalaPorPorcion || 0) * inv + (t.tiempoHoras || 0) * tarifaHora;
@@ -633,22 +646,24 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         costo = d.costoManual || 0;
       }
       costo = round2(costo);
-      costoDecoraciones += costo;
+      const precio = precioConMargen(costo, markup);
+      costoDecoraciones += costo; precioDecoraciones += precio;
       decoracionesDetalle.push({
-        slug: d.slug,
-        nombre: d.nombre,
-        costo,
-        fuente,
+        slug: d.slug, nombre: d.nombre, costo, margenPct: markup, precio, fuente,
         tecnicaId: d.tecnicaCreativaId?._id || null,
         tecnicaNombre: d.tecnicaCreativaId?.nombre || null,
       });
     }
     costoDecoraciones = round2(costoDecoraciones);
+    precioDecoraciones = round2(precioDecoraciones);
+
+    // Extras: markup global (renglones manuales del admin).
+    const precioExtras = precioConMargen(costoExtras, markup);
 
     // ── Totales ──────────────────────────────────────────────────
     const costoBase      = round2(costoBizcocho + costoRelleno + costoCobertura + costoDecoraciones);
     const costoTotal     = round2(costoBase + costoExtras);
-    const precioSugerido = round2(costoTotal * (1 + markup / 100));
+    const precioSugerido = round2(precioBizcocho + precioRelleno + precioCobertura + precioDecoraciones + precioExtras);
     const gananciaNeta   = round2(precioSugerido - costoTotal);
 
     const snapshot = {
@@ -658,15 +673,15 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       multiplicadorNiveles: mult,
       tarifaHora,
       bizcocho: bizcochoDetalle,
-      costoBizcocho,
+      costoBizcocho, precioBizcocho,
       relleno: rellenoDetalle,
-      costoRelleno,
+      costoRelleno, precioRelleno,
       cobertura: coberturaDetalle,
-      costoCobertura,
+      costoCobertura, precioCobertura,
       decoraciones: decoracionesDetalle,
-      costoDecoraciones,
+      costoDecoraciones, precioDecoraciones,
       extras,
-      costoExtras,
+      costoExtras, precioExtras,
       costoBase,
       costoTotal,
       markupPct: markup,
