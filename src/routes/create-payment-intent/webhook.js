@@ -8,6 +8,7 @@ const Pastel = require("../../models/pastelCotiza");
 const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
 const Personalizada = require("../../models/cotizacionPersonalizada");
+const VintagePedido = require("../../models/vintage/pedido");
 const GalletaPedido = require("../../models/galletaPedido");
 const GalletaSabor  = require("../../models/galletaSabor");
 const PostrePedido  = require("../../models/postrePedido");
@@ -47,6 +48,8 @@ function getCotizaModel(type) {
       return Snack;
     case "Personalizada":
       return Personalizada;
+    case "Vintage":
+      return VintagePedido;
     default:
       return null;
   }
@@ -105,7 +108,7 @@ async function markPaymentFinal(session, finalStatus) {
   // Solo si la cotización aún no tiene calendarEventId (evita
   // duplicados cuando paga primero anticipo y después saldo).
   // En su propio try/catch para no romper el webhook si Calendar falla.
-  if (!cotizacion.calendarEventId && !esPersonalizada) {
+  if (!cotizacion.calendarEventId && !esPersonalizada && payment.cotizacionType !== "Vintage") {
     try {
       const eventId = await createCotizacionEvent(cotizacion, payment.cotizacionType);
       if (eventId) {

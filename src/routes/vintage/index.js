@@ -22,21 +22,26 @@ const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100
  */
 async function cotizarVintage(body) {
   const items = [];
-  const add = (concepto, precio) => { if (precio > 0) items.push({ concepto, precio: round2(precio) }); };
+  // Guarda costo+precio+margen por aspecto (el público solo verá precio).
+  const add = (concepto, costo, margen) => {
+    const c = round2(costo);
+    if (c <= 0 && margen <= 0) return;
+    items.push({ concepto, costo: c, margen: Number(margen) || 0, precio: precioConMargen(c, margen) });
+  };
 
   // Porción: base + domo + branding (siempre incluidos).
   const porcion = body.porcionSlug ? await Porcion.findOne({ slug: body.porcionSlug, activo: true }) : null;
   const porciones = porcion?.porciones || 0;
   if (porcion) {
-    add("Base", precioConMargen(porcion.costoBase, porcion.margenBase));
-    add("Domo", precioConMargen(porcion.costoDomo, porcion.margenDomo));
-    add("Branding", precioConMargen(porcion.costoBranding, porcion.margenBranding));
+    add("Base", porcion.costoBase, porcion.margenBase);
+    add("Domo", porcion.costoDomo, porcion.margenDomo);
+    add("Branding", porcion.costoBranding, porcion.margenBranding);
   }
 
   // Pisos.
   if (body.pisosSlug) {
     const piso = await Piso.findOne({ slug: body.pisosSlug, activo: true });
-    if (piso) add(`${piso.niveles} pisos`, precioConMargen(piso.costo, piso.margen));
+    if (piso) add(`${piso.niveles} pisos`, piso.costo, piso.margen);
   }
 
   // Sabor / relleno (por porción) y cobertura (por gramos).
@@ -49,14 +54,14 @@ async function cotizarVintage(body) {
     const s = await SaborCotiza.findOne({ slug: body.saborSlug, activo: true }).populate("recetaId");
     if (s) {
       const { unitario, margen } = unitarioReceta(s, s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? 0);
-      add(`Sabor: ${s.nombre}`, precioConMargen(unitario * porciones, margen));
+      add(`Sabor: ${s.nombre}`, unitario * porciones, margen);
     }
   }
   if (body.rellenoSlug) {
     const r = await RellenoCotiza.findOne({ slug: body.rellenoSlug, activo: true }).populate("recetaId");
     if (r) {
       const { unitario, margen } = unitarioReceta(r, r.costoUnitarioSnapshot ?? r.costoPorPorcion ?? 0);
-      add(`Relleno: ${r.nombre}`, precioConMargen(unitario * porciones, margen));
+      add(`Relleno: ${r.nombre}`, unitario * porciones, margen);
     }
   }
   if (body.coberturaSlug) {
@@ -65,9 +70,9 @@ async function cotizarVintage(body) {
       if (c.recetaId && c.recetaId.portions > 0) {
         const gramos = Math.round((porciones / 10) * 500); // 500 g por 10 porciones
         const costoPorGramo = c.recetaId.total_cost / c.recetaId.portions;
-        add(`Cobertura: ${c.nombre}`, precioConMargen(costoPorGramo * gramos, c.recetaId.profit_margin ?? 0));
+        add(`Cobertura: ${c.nombre}`, costoPorGramo * gramos, c.recetaId.profit_margin ?? 0);
       } else {
-        add(`Cobertura: ${c.nombre}`, precioConMargen((c.costoUnitarioSnapshot ?? c.costoPorPorcion ?? 0) * porciones, 0));
+        add(`Cobertura: ${c.nombre}`, (c.costoUnitarioSnapshot ?? c.costoPorPorcion ?? 0) * porciones, 0);
       }
     }
   }
@@ -75,23 +80,26 @@ async function cotizarVintage(body) {
   // Color base.
   if (body.colorSlug) {
     const col = await Color.findOne({ slug: body.colorSlug, activo: true });
-    if (col) add(`Color: ${col.nombre}`, precioConMargen(col.costo, col.margen));
+    if (col) add(`Color: ${col.nombre}`, col.costo, col.margen);
   }
 
   // Decoraciones (multi).
   const decoSlugs = (body.decoraciones || []).map((d) => d.slug).filter(Boolean);
   if (decoSlugs.length) {
     const decos = await Decoracion.find({ slug: { $in: decoSlugs }, activo: true });
-    for (const d of decos) add(`Decoración: ${d.nombre}`, precioConMargen(d.costo, d.margen));
+    for (const d of decos) add(`Decoración: ${d.nombre}`, d.costo, d.margen);
   }
 
   const total = round2(items.reduce((a, x) => a + x.precio, 0));
-  return { items, total, porciones };
+  const totalCosto = round2(items.reduce((a, x) => a + (x.costo || 0), 0));
+  return { items, total, totalCosto, porciones };
 }
 
+// Público: NUNCA expone costos, solo precios.
 router.post("/cotizar", async (req, res) => {
   try {
-    res.json(await cotizarVintage(req.body || {}));
+    const r = await cotizarVintage(req.body || {});
+    res.json({ items: r.items.map(({ concepto, precio }) => ({ concepto, precio })), total: r.total, porciones: r.porciones });
   } catch (e) {
     console.error("Error cotizando vintage:", e);
     res.status(400).json({ message: e.message });

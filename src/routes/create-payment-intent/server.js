@@ -10,6 +10,7 @@ const Pastel = require("../../models/pastelCotiza");
 const Cupcake = require("../../models/cupcakesCotiza");
 const Snack = require("../../models/snackCotiza");
 const Personalizada = require("../../models/cotizacionPersonalizada");
+const VintagePedido = require("../../models/vintage/pedido");
 
 const { PAYMENT_OPTIONS, COTIZA_TYPES } = Payment;
 
@@ -28,10 +29,66 @@ function getCotizaModel(type) {
       return Snack;
     case "Personalizada":
       return Personalizada;
+    case "Vintage":
+      return VintagePedido;
     default:
       return null;
   }
 }
+
+/**
+ * POST /checkout/vintage-checkout
+ * Body: { pedidoId, paymentOption: "anticipo" | "total" }
+ * Pago de un Pastel Vintage (Stripe hosted). Monto calculado en servidor.
+ */
+router.post("/vintage-checkout", async (req, res) => {
+  try {
+    const { pedidoId, paymentOption } = req.body;
+    if (!pedidoId || !["anticipo", "total"].includes(paymentOption)) {
+      return res.status(400).json({ message: "Datos inválidos" });
+    }
+    const pedido = await VintagePedido.findById(pedidoId);
+    if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const precio = Number(pedido.total) || 0;
+    if (precio <= 0) return res.status(400).json({ message: "El pedido no tiene total" });
+    const anticipo = pedido.anticipo != null ? Number(pedido.anticipo) : Math.round(precio * 0.5);
+
+    const previosPaid = await Payment.find({ cotizacionId: pedido._id, cotizacionType: "Vintage", status: "paid" });
+    if (previosPaid.length) return res.status(409).json({ message: "Este pedido ya tiene pagos." });
+
+    const amount = paymentOption === "total" ? precio : anticipo;
+    const returnTo = `${FRONT_DOMAIN}/enduser/pastel-vintage?pedido=${pedido._id}&pago=ok`;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      locale: "es",
+      customer_email: pedido.cliente?.email || undefined,
+      line_items: [{
+        price_data: {
+          currency: "mxn",
+          product_data: { name: `Pastel Vintage (${paymentOption}) ${pedido.numeroOrden || ""}` },
+          unit_amount: Math.round(amount * 100),
+        },
+        quantity: 1,
+      }],
+      success_url: returnTo,
+      cancel_url: `${FRONT_DOMAIN}/enduser/pastel-vintage?pago=cancelado`,
+      metadata: { cotizacionId: String(pedido._id), cotizacionType: "Vintage", paymentOption, userId: pedido.userId || "" },
+    });
+
+    await Payment.create({
+      stripeSessionId: session.id, cotizacionId: pedido._id, cotizacionType: "Vintage",
+      paymentOption, amount, status: "pending", userId: pedido.userId || "",
+      email: pedido.cliente?.email || "", name: pedido.cliente?.nombre || "",
+    });
+
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error("Error checkout vintage:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
 
 /**
  * POST /checkout/create-checkout-session-public
