@@ -202,6 +202,11 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     calendarEventId: { type: String, default: "" },
     reminderSentAt:  { type: Date },
 
+    // Recordatorios de cotización activa (si no se ha agendado):
+    // uno 7 días antes del evento y "última oportunidad" 3 días antes.
+    recordatorioSemanaAt:   { type: Date, default: null },
+    recordatorioTresDiasAt: { type: Date, default: null },
+
     // Notas internas append-only (mismo patrón que pastelCotiza)
     notasInternas: { type: [notaInternaSchema], default: [] },
   },

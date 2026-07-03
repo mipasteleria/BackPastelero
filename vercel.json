@@ -15,6 +15,10 @@
     {
       "path": "/jobs/cleanup-imagenes",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/jobs/recordatorios-cotizacion",
+      "schedule": "30 15 * * *"
     }
   ]
 }

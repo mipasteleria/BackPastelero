@@ -14,7 +14,7 @@ const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
-const { syncCotizacionCalendar } = require("../utils/cotizacionCalendarSync");
+const { syncPersonalizadaCalendar } = require("../utils/pedidoCalendarSync");
 const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
 const nodemailer = require("nodemailer");
 const { generarNumeroOrden } = require("../utils/orderNumber");
@@ -410,8 +410,8 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     );
     if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
 
-    // Sync Calendar igual que en pastelCotiza.
-    syncCotizacionCalendar(CotizacionPersonalizada, doc, "Pastel");
+    // Sync Calendar (crea evento al pasar a Agendado, borra al Cancelar).
+    syncPersonalizadaCalendar(CotizacionPersonalizada, doc);
 
     res.json({ message: "Cotización actualizada", data: doc });
   } catch (e) {

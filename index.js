@@ -12,6 +12,7 @@ const { requireAuth } = checkRoleToken;
 const mongoDB = require("./src/database/db.js");
 const { startReminderCron } = require("./src/jobs/reminderCron");
 const { startImagenesCleanupCron, runImagenesCleanup } = require("./src/jobs/imagenesCleanup");
+const { startCotizacionRemindersCron, runCotizacionReminders } = require("./src/jobs/cotizacionReminders");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
 const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
@@ -384,6 +385,23 @@ app.all("/jobs/cleanup-imagenes", async (req, res) => {
   }
 });
 
+// Recordatorios de cotización activa (7 y 3 días antes del evento) — Vercel Cron.
+app.all("/jobs/recordatorios-cotizacion", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const provided =
+    req.headers.authorization?.replace(/^Bearer\s+/i, "") || req.query.secret;
+  if (!secret || provided !== secret) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+  try {
+    const result = await runCotizacionReminders();
+    res.json({ message: "Recordatorios ejecutados", ...result });
+  } catch (e) {
+    console.error("[/jobs/recordatorios-cotizacion] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
@@ -397,6 +415,7 @@ if (!process.env.VERCEL) {
       console.log(message);
       startReminderCron();
       startImagenesCleanupCron();
+      startCotizacionRemindersCron();
       app.listen(port, () => {
         console.log("Server is listening on port", port);
       });

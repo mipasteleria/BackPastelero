@@ -349,6 +349,62 @@ async function createCotizacionEvent(cotizacion, tipo) {
 }
 
 /**
+ * Crea un evento genérico de pedido en Calendar. Para los modelos nuevos
+ * (CotizacionPersonalizada, PastelVintagePedido) cuya fecha es un Date y
+ * cuyos campos no siguen el esquema legacy.
+ *
+ * @param {object} opts
+ *   emoji, titulo        → summary "🎂 titulo"
+ *   fecha (Date|ISO)     → día del evento
+ *   hora ("HH:mm" opc.)  → default 12:00
+ *   descripcionLineas [] → body
+ *   location (opc.)      → default sucursal
+ *   esEnvio (bool)
+ *   refId, tipoProducto  → extendedProperties
+ * @returns {Promise<string|null>} eventId
+ */
+async function createEventoPedido(opts) {
+  const calendar = getCalendarClient();
+  if (!calendar) return null;
+  if (!opts?.fecha) return null;
+
+  try {
+    const fechaISO = new Date(opts.fecha).toISOString().slice(0, 10);
+    const startISO = combinarFechaHora(fechaISO, opts.hora || "12:00");
+    const endISO   = sumarMinutos(startISO, 60);
+
+    const event = {
+      summary: `${opts.emoji || "🎂"} ${opts.titulo}`,
+      description: (opts.descripcionLineas || []).filter(Boolean).join("\n"),
+      location: opts.location || "Calle Bogotá 2866a, Col. Providencia, Guadalajara, Jal.",
+      start: { dateTime: startISO, timeZone: TIMEZONE },
+      end:   { dateTime: endISO,   timeZone: TIMEZONE },
+      colorId: opts.esEnvio ? "6" : "9",
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: "popup", minutes: 24 * 60 },
+          { method: "popup", minutes: 60 },
+        ],
+      },
+      extendedProperties: {
+        private: {
+          refId: String(opts.refId || ""),
+          tipoProducto: opts.tipoProducto || "pedido",
+        },
+      },
+    };
+
+    const res = await calendar.events.insert({ calendarId: getCalendarId(), requestBody: event });
+    console.log(`[gcal] evento de pedido creado (${opts.tipoProducto} ${opts.refId}): ${res.data.id}`);
+    return res.data.id;
+  } catch (e) {
+    console.error(`[gcal] error creando evento de pedido ${opts?.refId}:`, e.message);
+    return null;
+  }
+}
+
+/**
  * Elimina un evento por su ID. Útil al cancelar un pedido.
  * No falla si el evento ya no existe.
  */
@@ -467,6 +523,7 @@ module.exports = {
   createGalletaEvent,
   createPostreEvent,
   createCotizacionEvent,
+  createEventoPedido,
   parseDeliveryDateStr,
   deleteEvent,
 };

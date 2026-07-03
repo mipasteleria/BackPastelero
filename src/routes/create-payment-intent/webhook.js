@@ -15,6 +15,7 @@ const PostrePedido  = require("../../models/postrePedido");
 const { sendGalletaConfirmation, sendGalletaConfirmationToAdmin, sendLowStockAlert } = require("./galletaEmails");
 const { sendPostreConfirmation, sendPostreConfirmationToAdmin } = require("./postreEmails");
 const { createGalletaEvent, createPostreEvent, createCotizacionEvent } = require("../../utils/googleCalendar");
+const { syncPersonalizadaCalendar, syncVintageCalendar } = require("../../utils/pedidoCalendarSync");
 
 /**
  * POST /webhook/stripe
@@ -108,12 +109,18 @@ async function markPaymentFinal(session, finalStatus) {
   // Solo si la cotización aún no tiene calendarEventId (evita
   // duplicados cuando paga primero anticipo y después saldo).
   // En su propio try/catch para no romper el webhook si Calendar falla.
-  if (!cotizacion.calendarEventId && !esPersonalizada && payment.cotizacionType !== "Vintage") {
+  if (!cotizacion.calendarEventId) {
     try {
-      const eventId = await createCotizacionEvent(cotizacion, payment.cotizacionType);
-      if (eventId) {
-        cotizacion.calendarEventId = eventId;
-        await cotizacion.save();
+      if (esPersonalizada) {
+        syncPersonalizadaCalendar(Personalizada, cotizacion);
+      } else if (payment.cotizacionType === "Vintage") {
+        syncVintageCalendar(VintagePedido, cotizacion);
+      } else {
+        const eventId = await createCotizacionEvent(cotizacion, payment.cotizacionType);
+        if (eventId) {
+          cotizacion.calendarEventId = eventId;
+          await cotizacion.save();
+        }
       }
     } catch (e) {
       console.error(`[webhook] error creando evento Calendar para cotización ${cotizacion._id}:`, e.message);

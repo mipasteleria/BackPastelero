@@ -6,6 +6,7 @@ const { requireAuth } = checkRoleToken;
 const { resolverZona } = require("../../utils/zonasEnvio");
 const { generarNumeroOrden } = require("../../utils/orderNumber");
 const { mountNotaInternaRoutes } = require("../../utils/notaInternaRoute");
+const { syncVintageCalendar } = require("../../utils/pedidoCalendarSync");
 const { cotizarVintage } = require("./index");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -104,6 +105,7 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const doc = await Pedido.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
+    syncVintageCalendar(Pedido, doc);
     res.json({ message: "Pedido actualizado", data: doc });
   } catch (e) {
     res.status(400).json({ message: e.message });
