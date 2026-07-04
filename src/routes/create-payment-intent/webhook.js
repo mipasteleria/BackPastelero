@@ -171,6 +171,8 @@ router.post("/", async (req, res) => {
         } else {
           await markPaymentFinal(session, "paid");
         }
+        // Aviso interno para el admin (antes se creaba desde el cliente).
+        await crearNotificacionPago(session);
         break;
       case "checkout.session.expired":
         if (esCurso) {
@@ -418,6 +420,18 @@ async function procesarCarrito(session, finalStatus) {
         }
       }
     } catch (e) { console.error("[webhook carrito] vintage:", e.message); }
+  }
+}
+
+/** Crea la notificación interna de "pago realizado" para el admin. */
+async function crearNotificacionPago(session) {
+  try {
+    const Notificacion = require("../../models/notificaciones");
+    const email = session?.customer_details?.email || session?.customer_email || "Un cliente";
+    // Sin userId → es una notificación del negocio (la ve el admin).
+    await Notificacion.create({ mensaje: `${email} ha realizado un pago`, leida: false });
+  } catch (e) {
+    console.error("[webhook] no se pudo crear notificación de pago:", e.message);
   }
 }
 

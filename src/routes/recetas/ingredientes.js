@@ -3,7 +3,7 @@ const router = express.Router();
 const Ingrediente = require("../../models/recetas/ingrediente"); // Verifica que la ruta al modelo sea correcta
 const checkRoleToken = require("../../middlewares/myRoleToken");
 
-router.post("/", async (req, res) => {
+router.post("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const ingrediente = req.body;
 
@@ -59,7 +59,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Actualizar un ingrediente por ID (PUT)
-router.put("/:id", async (req, res) => {
+router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const ingrediente = req.body;
@@ -80,7 +80,7 @@ router.put("/:id", async (req, res) => {
 });
 
 // Eliminar un ingrediente por ID (DELETE)
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const deletedIngrediente = await Ingrediente.findByIdAndDelete(id);

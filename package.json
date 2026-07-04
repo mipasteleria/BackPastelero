@@ -20,15 +20,16 @@
     "dotenv": "^16.4.5",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "googleapis": "^171.4.0",
+    "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "mime": "^4.0.4",
     "mongodb": "^6.21.0",
     "mongoose": "^8.4.4",
     "multer": "^2.0.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.5",
-    "socket.io": "^4.7.5",
+    "nodemailer": "^9.0.3",
     "stripe": "^16.8.0"
   },
   "devDependencies": {

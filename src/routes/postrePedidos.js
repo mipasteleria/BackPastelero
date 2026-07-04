@@ -210,8 +210,22 @@ router.post("/checkout", async (req, res) => {
 // de campos — no expone notasInternas ni datos sensibles del cliente.
 router.get("/orden/:numeroOrden", async (req, res) => {
   try {
+    // Prueba de propiedad por email (ver galletaPedidos): evita enumeración
+    // de pedidos por número de orden. El admin autenticado puede omitirlo.
+    let isAdmin = false;
+    const token = req.headers.authorization?.split(" ")[1];
+    if (token) { try { isAdmin = require("jsonwebtoken").verify(token, process.env.JWT_SIGN)?.role === "admin"; } catch {} }
+
     const pedido = await PostrePedido.findOne({ numeroOrden: req.params.numeroOrden });
     if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    if (!isAdmin) {
+      const emailQuery = String(req.query.email || "").trim().toLowerCase();
+      const emailPedido = String(pedido.cliente?.email || "").trim().toLowerCase();
+      if (!emailQuery || emailQuery !== emailPedido) {
+        return res.status(403).json({ message: "Para ver este pedido, confirma el correo con el que se hizo." });
+      }
+    }
 
     const safe = {
       numeroOrden:       pedido.numeroOrden,

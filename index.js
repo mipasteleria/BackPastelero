@@ -58,7 +58,22 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
+const helmet = require("helmet");
+const { authLimiter, sensitiveLimiter, globalLimiter, logForbidden } = require("./src/middlewares/security");
+
+// Detrás del proxy de Vercel: necesario para que req.ip y el rate-limit
+// resuelvan la IP real desde X-Forwarded-For.
+app.set("trust proxy", 1);
+
+// Cabeceras de seguridad (HSTS, X-Content-Type-Options, etc.). Se desactiva
+// CSP por defecto para no romper recursos servidos desde GCS/Stripe.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
 app.use(cors(corsOptions));
+
+// Rate-limit global suave + registro de accesos denegados (401/403).
+app.use(globalLimiter);
+app.use(logForbidden);
 
 // Esperar a que MongoDB esté conectado antes de procesar requests.
 // Sin esto, en Vercel un cold-start puede dejar la query en buffer hasta
@@ -85,6 +100,11 @@ app.use("/webhook/stripe", express.raw({ type: "application/json" }), stripeWebh
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Rate-limit reforzado en login y recuperación de contraseña (fuerza
+// bruta / enumeración). Se aplica antes de montar el router de usuarios.
+app.use("/users/login", authLimiter);
+app.use("/users/forgot-password", authLimiter);
+app.use("/users/reset-password", authLimiter);
 app.use("/users", usersRoutes);
 app.use("/pricecake", pricesCakeRoutes);
 app.use("/pricecupcake", pricesCupcakesRoutes);
@@ -97,8 +117,10 @@ app.use("/costs", costsRoutes);
 app.use("/tecnicas", tecnicasCreativasRoutes);
 app.use("/productos", productosRoutes);
 app.use("/galletaSabores", galletaSaboresRoutes);
+app.use("/galletaPedidos/orden", sensitiveLimiter);
+app.use("/postrePedidos/orden", sensitiveLimiter);
 app.use("/galletaPedidos", galletaPedidosRoutes);
-app.use("/send-confirmation-email", sendConfirmationEmail);
+app.use("/send-confirmation-email", sensitiveLimiter, sendConfirmationEmail);
 app.use("/notificaciones", notificacionesRoutes);
 app.use("/admin", calendarStatusRoutes);
 app.use("/home-config", homeConfigRoutes);

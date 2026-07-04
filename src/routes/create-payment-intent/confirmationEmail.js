@@ -1,8 +1,11 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const router = express.Router();
+const { requireAuth } = require('../../middlewares/myRoleToken');
 
-router.post('/send-confirmation-email', async (req, res) => {
+// requireAuth: evita que la ruta sea un relay de correo abierto (spam/
+// phishing con nuestro dominio). Solo usuarios autenticados pueden dispararla.
+router.post('/send-confirmation-email', requireAuth, async (req, res) => {
   const { email, customerName, orderDetails } = req.body;
 
   // Configurar el transportador de nodemailer
