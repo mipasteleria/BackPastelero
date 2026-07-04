@@ -141,6 +141,10 @@ router.post("/", async (req, res) => {
       ? body.tipoProducto
       : "pastel";
 
+    if (body.evento?.fecha && await require("./dashboardAgenda").esFechaBloqueada(body.evento.fecha)) {
+      return res.status(409).json({ message: "Esa fecha no está disponible, elige otro día" });
+    }
+
     // Validez: 30 días desde el envío. Visible al cliente.
     const VALIDEZ_DIAS = 30;
     const validUntil = new Date(Date.now() + VALIDEZ_DIAS * 86400000);

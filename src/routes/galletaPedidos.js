@@ -99,6 +99,9 @@ router.post("/checkout", async (req, res) => {
     if (!validacion.ok) {
       return res.status(400).json({ message: validacion.error });
     }
+    if (await require("../routes/dashboardAgenda").esFechaBloqueada(fechaEntrega)) {
+      return res.status(409).json({ message: "Esa fecha no está disponible, elige otro día" });
+    }
 
     // ── 3) Cargar todos los sabores referenciados (snapshot precio + nombre) ──
     const slugsUsados = new Set();

@@ -112,6 +112,7 @@ app.use("/vintage-pedidos", require("./src/routes/vintage/pedidos"));
 app.use("/carrito", require("./src/routes/carritoUnificado"));
 const cursosRoutes = require("./src/routes/cursos");
 app.use("/cursos", cursosRoutes);
+app.use("/", require("./src/routes/dashboardAgenda")); // /fechas-bloqueadas + /dashboard-agenda
 
 /**
  * GET /video-stream/:token/<path> — sirve los archivos HLS/DASH del bucket

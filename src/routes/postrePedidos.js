@@ -63,6 +63,9 @@ router.post("/checkout", async (req, res) => {
     if (!validacion.ok) {
       return res.status(400).json({ message: validacion.error });
     }
+    if (await require("./dashboardAgenda").esFechaBloqueada(fechaEntrega)) {
+      return res.status(409).json({ message: "Esa fecha no está disponible, elige otro día" });
+    }
 
     // ── 3) Cargar postres referenciados (snapshot precio + nombre) ──
     const postreIds = [...new Set(items.map((it) => it.postreId).filter(Boolean))];

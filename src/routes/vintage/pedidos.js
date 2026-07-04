@@ -21,6 +21,9 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Faltan datos de contacto" });
     }
     if (!body.porcionSlug) return res.status(400).json({ message: "Falta el tamaño" });
+    if (body.fecha && await require("../dashboardAgenda").esFechaBloqueada(body.fecha)) {
+      return res.status(409).json({ message: "Esa fecha no está disponible, elige otro día" });
+    }
 
     // Precio autoritativo en el servidor (con costos para el admin).
     const cot = await cotizarVintage(body);

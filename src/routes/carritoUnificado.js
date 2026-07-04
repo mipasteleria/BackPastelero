@@ -38,6 +38,9 @@ router.post("/checkout", async (req, res) => {
 
     const validacion = validarFechaHora({ fecha: fechaEntrega, hora: horaEntrega, tipoEntrega });
     if (!validacion.ok) return res.status(400).json({ message: validacion.error });
+    if (await require("./dashboardAgenda").esFechaBloqueada(fechaEntrega)) {
+      return res.status(409).json({ message: "Esa fecha no está disponible, elige otro día" });
+    }
 
     // ── Envío (una sola vez para todo el carrito) ──
     let costoEnvio = 0, zonaResuelta = null, direccionFinal = {};
