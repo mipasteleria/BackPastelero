@@ -156,10 +156,13 @@ router.post("/", async (req, res) => {
     const esGalletaNY = tipoSession === "galleta_ny";
     const esPostre    = tipoSession === "postre";
     const esCarrito   = tipoSession === "carrito";
+    const esCurso     = tipoSession === "curso";
 
     switch (event.type) {
       case "checkout.session.completed":
-        if (esCarrito) {
+        if (esCurso) {
+          await procesarCompraCurso(session, "paid");
+        } else if (esCarrito) {
           await procesarCarrito(session, "paid");
         } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "paid");
@@ -170,7 +173,9 @@ router.post("/", async (req, res) => {
         }
         break;
       case "checkout.session.expired":
-        if (esCarrito) {
+        if (esCurso) {
+          await procesarCompraCurso(session, "expired");
+        } else if (esCarrito) {
           await procesarCarrito(session, "failed");
         } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
@@ -181,7 +186,9 @@ router.post("/", async (req, res) => {
         }
         break;
       case "checkout.session.async_payment_failed":
-        if (esCarrito) {
+        if (esCurso) {
+          await procesarCompraCurso(session, "failed");
+        } else if (esCarrito) {
           await procesarCarrito(session, "failed");
         } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
@@ -412,6 +419,18 @@ async function procesarCarrito(session, finalStatus) {
       }
     } catch (e) { console.error("[webhook carrito] vintage:", e.message); }
   }
+}
+
+/** Confirma o cancela una compra de curso. Idempotente. */
+async function procesarCompraCurso(session, finalStatus) {
+  const compraId = session?.metadata?.compraId;
+  if (!compraId) return;
+  const CursoCompra = require("../../models/cursos/compra");
+  const compra = await CursoCompra.findById(compraId);
+  if (!compra || compra.status === finalStatus) return;
+  compra.status = finalStatus;
+  await compra.save();
+  console.log(`[webhook curso] compra ${compraId} → ${finalStatus}`);
 }
 
 module.exports = router;

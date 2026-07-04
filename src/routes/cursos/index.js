@@ -38,6 +38,20 @@ router.get("/", async (_req, res) => {
   } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
+// ── Público: detalle por slug (sin rutas internas de video) ──────
+router.get("/slug/:slug", async (req, res) => {
+  try {
+    const curso = await Curso.findOne({ slug: req.params.slug, activo: true })
+      .select("-lecciones.video.gcsInputPath -lecciones.video.jobName -lecciones.video.outputPrefix");
+    if (!curso) return res.status(404).json({ message: "Curso no encontrado" });
+
+    // ¿El solicitante ya tiene acceso? (para que el front muestre player
+    // o botón de compra). No falla sin token.
+    const acceso = await tieneAcceso(req, curso).catch(() => false);
+    res.json({ data: curso, acceso });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
 // ── Admin: todos ──────────────────────────────────────────────────
 router.get("/admin", checkRoleToken("admin"), async (_req, res) => {
   try {
@@ -193,6 +207,71 @@ router.get("/:id/lecciones/:lid/estado-video", checkRoleToken("admin"), async (r
     console.error("[cursos] estado-video:", e.message);
     res.status(500).json({ message: e.message });
   }
+});
+
+// ── Compra del curso (pago único, Stripe) ─────────────────────────
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const { requireAuth } = checkRoleToken;
+
+router.post("/:id/comprar", requireAuth, async (req, res) => {
+  try {
+    const curso = await Curso.findById(req.params.id);
+    if (!curso || !curso.activo) return res.status(404).json({ message: "Curso no disponible" });
+    const precio = Number(curso.precio) || 0;
+    if (precio <= 0) return res.status(400).json({ message: "El curso no tiene precio configurado" });
+
+    // ¿Ya lo compró?
+    const ya = await CursoCompra.findOne({
+      cursoId: curso._id, status: "paid",
+      $or: [{ userId: String(req.user._id) }, { email: req.user.email || "__" }],
+    });
+    if (ya) return res.status(409).json({ message: "Ya tienes acceso a este curso" });
+
+    const compra = await CursoCompra.create({
+      cursoId: curso._id,
+      userId: String(req.user._id),
+      email: req.user.email || "",
+      tipoAcceso: "compra",
+      precio,
+      status: "pending",
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      locale: "es",
+      customer_email: req.user.email || undefined,
+      line_items: [{
+        price_data: {
+          currency: "mxn",
+          product_data: { name: `Curso: ${curso.titulo}` },
+          unit_amount: Math.round(precio * 100),
+        },
+        quantity: 1,
+      }],
+      success_url: `${process.env.FRONT_DOMAIN}/cursos/${curso.slug}?compra=ok`,
+      cancel_url: `${process.env.FRONT_DOMAIN}/cursos/${curso.slug}?compra=cancelada`,
+      metadata: { tipo: "curso", compraId: String(compra._id) },
+    });
+
+    compra.stripeSessionId = session.id;
+    await compra.save();
+
+    res.json({ url: session.url });
+  } catch (e) {
+    console.error("[cursos] comprar:", e.message);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+// Mis cursos comprados (para "Mis cursos" del usuario).
+router.get("/mis-cursos", requireAuth, async (req, res) => {
+  try {
+    const compras = await CursoCompra.find({
+      status: "paid",
+      $or: [{ userId: String(req.user._id) }, { email: req.user.email || "__" }],
+    }).populate("cursoId", "titulo slug thumbnailUrl modalidad");
+    res.json({ data: compras.filter((c) => c.cursoId) });
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 // ── Token de reproducción ─────────────────────────────────────────
