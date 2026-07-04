@@ -110,6 +110,42 @@ app.use("/cotizacion-personalizada", cotizacionPersonalizadaRoutes);
 app.use("/vintage-catalogos", require("./src/routes/vintage"));
 app.use("/vintage-pedidos", require("./src/routes/vintage/pedidos"));
 app.use("/carrito", require("./src/routes/carritoUnificado"));
+const cursosRoutes = require("./src/routes/cursos");
+app.use("/cursos", cursosRoutes);
+
+/**
+ * GET /video-stream/:token/<path> — sirve los archivos HLS/DASH del bucket
+ * privado. El token (firmado por /cursos/.../play) autoriza todo el prefijo
+ * de salida de esa lección, y como los manifests usan rutas relativas, los
+ * segmentos resuelven bajo el mismo token.
+ */
+app.get(/^\/video-stream\/([^/]+)\/(.+)$/, async (req, res) => {
+  const [token, filePath] = [req.params[0], req.params[1]];
+  if (!storage) return res.status(503).json({ error: "GCS no configurado" });
+  if (!cursosRoutes.verificarAcceso(token, filePath)) {
+    return res.status(403).json({ error: "Acceso no autorizado o expirado" });
+  }
+  try {
+    const file = storage.bucket(bucketName).file(filePath);
+    const [exists] = await file.exists();
+    if (!exists) return res.status(404).json({ error: "No encontrado" });
+    const ct = filePath.endsWith(".m3u8") ? "application/vnd.apple.mpegurl"
+      : filePath.endsWith(".mpd") ? "application/dash+xml"
+      : filePath.endsWith(".ts") ? "video/mp2t"
+      : filePath.endsWith(".m4s") || filePath.endsWith(".mp4") ? "video/mp4"
+      : filePath.endsWith(".vtt") ? "text/vtt"
+      : "application/octet-stream";
+    res.setHeader("Content-Type", ct);
+    // Manifests cortos: no cachear (permiten rotar tokens); segmentos sí.
+    res.setHeader("Cache-Control", /\.(m3u8|mpd)$/.test(filePath) ? "no-store" : "public, max-age=31536000, immutable");
+    file.createReadStream()
+      .on("error", (e) => { console.error("[video-stream]", e.message); if (!res.headersSent) res.status(500).end(); })
+      .pipe(res);
+  } catch (e) {
+    console.error("[video-stream]", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
