@@ -14,6 +14,7 @@ const GalletaSabor  = require("../../models/galletaSabor");
 const PostrePedido  = require("../../models/postrePedido");
 const { sendGalletaConfirmation, sendGalletaConfirmationToAdmin, sendLowStockAlert } = require("./galletaEmails");
 const { sendPostreConfirmation, sendPostreConfirmationToAdmin } = require("./postreEmails");
+const { sendVintageConfirmation, sendVintageConfirmationToAdmin } = require("./vintageEmails");
 const { createGalletaEvent, createPostreEvent, createCotizacionEvent } = require("../../utils/googleCalendar");
 const { syncPersonalizadaCalendar, syncVintageCalendar } = require("../../utils/pedidoCalendarSync");
 
@@ -125,6 +126,11 @@ async function markPaymentFinal(session, finalStatus) {
     } catch (e) {
       console.error(`[webhook] error creando evento Calendar para cotización ${cotizacion._id}:`, e.message);
     }
+  }
+
+  // Correo de confirmación para pedidos Vintage (una sola vez).
+  if (payment.cotizacionType === "Vintage") {
+    await enviarConfirmacionVintage(cotizacion);
   }
 }
 
@@ -414,12 +420,31 @@ async function procesarCarrito(session, finalStatus) {
           pedido.saldoPendiente = 0;
           await pedido.save();
           syncVintageCalendar(VintagePedido, pedido);
+          await enviarConfirmacionVintage(pedido);
         } else {
           pedido.status = "Cancelado";
           await pedido.save();
         }
       }
     } catch (e) { console.error("[webhook carrito] vintage:", e.message); }
+  }
+}
+
+/**
+ * Envía la confirmación de un pedido Vintage (cliente + admin) una sola
+ * vez. Usa confirmacionEnviadaAt como guard para no duplicar cuando el
+ * cliente paga primero anticipo y luego el saldo. No rompe el webhook si
+ * el correo falla.
+ */
+async function enviarConfirmacionVintage(pedido) {
+  try {
+    if (!pedido || pedido.confirmacionEnviadaAt) return;
+    await sendVintageConfirmation(pedido);
+    await sendVintageConfirmationToAdmin(pedido);
+    pedido.confirmacionEnviadaAt = new Date();
+    await pedido.save();
+  } catch (e) {
+    console.error(`[webhook] error enviando confirmación vintage ${pedido?.numeroOrden}:`, e.message);
   }
 }
 

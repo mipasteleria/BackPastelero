@@ -49,6 +49,7 @@ const pedidoVintageSchema = new mongoose.Schema(
     status: { type: String, default: "Pendiente" },
     calendarEventId: { type: String, default: "" },
     reminderSentAt:  { type: Date },
+    confirmacionEnviadaAt: { type: Date }, // guard: evita reenviar el correo de confirmación
     notasInternas: { type: [notaInternaSchema], default: [] },
   },
   { timestamps: true }

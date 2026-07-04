@@ -109,6 +109,21 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     const doc = await Pedido.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
     syncVintageCalendar(Pedido, doc);
+
+    // Si el admin agenda el pedido manualmente (anticipo en efectivo/
+    // transferencia), enviar la confirmación al cliente una sola vez.
+    if (/^Agendado/.test(doc.status || "") && !doc.confirmacionEnviadaAt) {
+      try {
+        const { sendVintageConfirmation, sendVintageConfirmationToAdmin } = require("../create-payment-intent/vintageEmails");
+        await sendVintageConfirmation(doc);
+        await sendVintageConfirmationToAdmin(doc);
+        doc.confirmacionEnviadaAt = new Date();
+        await doc.save();
+      } catch (e) {
+        console.error(`[vintage PUT] error enviando confirmación ${doc.numeroOrden}:`, e.message);
+      }
+    }
+
     res.json({ message: "Pedido actualizado", data: doc });
   } catch (e) {
     res.status(400).json({ message: e.message });
