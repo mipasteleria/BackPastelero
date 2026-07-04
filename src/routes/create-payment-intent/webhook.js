@@ -155,10 +155,13 @@ router.post("/", async (req, res) => {
     const tipoSession = session?.metadata?.tipo;
     const esGalletaNY = tipoSession === "galleta_ny";
     const esPostre    = tipoSession === "postre";
+    const esCarrito   = tipoSession === "carrito";
 
     switch (event.type) {
       case "checkout.session.completed":
-        if (esGalletaNY) {
+        if (esCarrito) {
+          await procesarCarrito(session, "paid");
+        } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "paid");
         } else if (esPostre) {
           await procesarPedidoPostre(session, "paid");
@@ -167,7 +170,9 @@ router.post("/", async (req, res) => {
         }
         break;
       case "checkout.session.expired":
-        if (esGalletaNY) {
+        if (esCarrito) {
+          await procesarCarrito(session, "failed");
+        } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
         } else if (esPostre) {
           await procesarPedidoPostre(session, "failed");
@@ -176,7 +181,9 @@ router.post("/", async (req, res) => {
         }
         break;
       case "checkout.session.async_payment_failed":
-        if (esGalletaNY) {
+        if (esCarrito) {
+          await procesarCarrito(session, "failed");
+        } else if (esGalletaNY) {
           await procesarPedidoGalleta(session, "failed");
         } else if (esPostre) {
           await procesarPedidoPostre(session, "failed");
@@ -369,6 +376,41 @@ async function procesarPedidoPostre(session, finalStatus) {
     }
   } catch (e) {
     console.error("[webhook postre] error creando evento en Calendar:", e.message);
+  }
+}
+
+/**
+ * Procesa una sesión de checkout del carrito unificado: confirma cada
+ * pedido hijo (galletas / postres / vintage) reusando los flujos
+ * individuales mediante una sesión sintética con el pedidoId adecuado.
+ */
+async function procesarCarrito(session, finalStatus) {
+  const m = session?.metadata || {};
+  const shim = (pedidoId) => ({ id: session.id, payment_intent: session.payment_intent, metadata: { pedidoId } });
+
+  if (m.galletaPedidoId) {
+    try { await procesarPedidoGalleta(shim(m.galletaPedidoId), finalStatus); }
+    catch (e) { console.error("[webhook carrito] galletas:", e.message); }
+  }
+  if (m.postrePedidoId) {
+    try { await procesarPedidoPostre(shim(m.postrePedidoId), finalStatus); }
+    catch (e) { console.error("[webhook carrito] postres:", e.message); }
+  }
+  if (m.vintagePedidoId) {
+    try {
+      const pedido = await VintagePedido.findById(m.vintagePedidoId);
+      if (pedido) {
+        if (finalStatus === "paid") {
+          pedido.status = "Agendado con el 100%";
+          pedido.saldoPendiente = 0;
+          await pedido.save();
+          syncVintageCalendar(VintagePedido, pedido);
+        } else {
+          pedido.status = "Cancelado";
+          await pedido.save();
+        }
+      }
+    } catch (e) { console.error("[webhook carrito] vintage:", e.message); }
   }
 }
 

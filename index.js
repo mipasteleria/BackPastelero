@@ -109,6 +109,7 @@ app.use("/cotizacion-catalogos", cotizacionCatalogosRoutes);
 app.use("/cotizacion-personalizada", cotizacionPersonalizadaRoutes);
 app.use("/vintage-catalogos", require("./src/routes/vintage"));
 app.use("/vintage-pedidos", require("./src/routes/vintage/pedidos"));
+app.use("/carrito", require("./src/routes/carritoUnificado"));
 app.get("/health", (req, res) => {
   res.json({ status: "ok", ts: Date.now() });
 });
