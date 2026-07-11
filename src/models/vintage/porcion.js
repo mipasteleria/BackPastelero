@@ -15,12 +15,18 @@ const porcionSchema = new mongoose.Schema(
     pisosMax: { type: Number, default: 1, min: 1, max: 3 },
     anticipacionDias: { type: Number, default: 5, min: 0 },
 
+    // Costo por concepto: manual (costoX) o vinculado a materia prima
+    // (insumoXId). Si hay insumo vinculado, al cotizar se usa su costo
+    // unitario ACTUAL (cost/amount) — se actualiza solo al subir el insumo.
     costoBase:     { type: Number, default: 0, min: 0 },
     margenBase:    { type: Number, default: 0, min: 0 },
+    insumoBaseId:  { type: mongoose.Schema.Types.ObjectId, ref: "insumos", default: null },
     costoDomo:     { type: Number, default: 0, min: 0 },
     margenDomo:    { type: Number, default: 0, min: 0 },
+    insumoDomoId:  { type: mongoose.Schema.Types.ObjectId, ref: "insumos", default: null },
     costoBranding: { type: Number, default: 0, min: 0 },
     margenBranding:{ type: Number, default: 0, min: 0 },
+    insumoBrandingId: { type: mongoose.Schema.Types.ObjectId, ref: "insumos", default: null },
 
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },

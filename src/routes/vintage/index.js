@@ -10,6 +10,7 @@ const Decoracion = require("../../models/vintage/decoracion");
 const SaborCotiza = require("../../models/cotizacionCatalogos/sabor");
 const RellenoCotiza = require("../../models/cotizacionCatalogos/relleno");
 const CoberturaCotiza = require("../../models/cotizacionCatalogos/cobertura");
+const Insumo = require("../../models/insumos");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100));
@@ -29,13 +30,22 @@ async function cotizarVintage(body) {
     items.push({ concepto, costo: c, margen: Number(margen) || 0, precio: precioConMargen(c, margen) });
   };
 
-  // Porción: base + domo + branding (siempre incluidos).
+  // Porción: base + domo + branding (siempre incluidos). Si el concepto
+  // está vinculado a materia prima, usa el costo unitario ACTUAL del
+  // insumo (cost del paquete / amount de unidades); si no, el manual.
   const porcion = body.porcionSlug ? await Porcion.findOne({ slug: body.porcionSlug, activo: true }) : null;
   const porciones = porcion?.porciones || 0;
   if (porcion) {
-    add("Base", porcion.costoBase, porcion.margenBase);
-    add("Domo", porcion.costoDomo, porcion.margenDomo);
-    add("Branding", porcion.costoBranding, porcion.margenBranding);
+    const costoConcepto = async (insumoId, costoManual) => {
+      if (insumoId) {
+        const ins = await Insumo.findById(insumoId);
+        if (ins) return (Number(ins.cost) || 0) / (Number(ins.amount) || 1);
+      }
+      return costoManual;
+    };
+    add("Base", await costoConcepto(porcion.insumoBaseId, porcion.costoBase), porcion.margenBase);
+    add("Domo", await costoConcepto(porcion.insumoDomoId, porcion.costoDomo), porcion.margenDomo);
+    add("Branding", await costoConcepto(porcion.insumoBrandingId, porcion.costoBranding), porcion.margenBranding);
   }
 
   // Pisos.
@@ -118,7 +128,8 @@ router.use("/porciones", crudFactory({
   Model: Porcion,
   camposEditables: [
     "slug", "nombre", "porciones", "pisosMax", "anticipacionDias",
-    "costoBase", "margenBase", "costoDomo", "margenDomo", "costoBranding", "margenBranding",
+    "costoBase", "margenBase", "insumoBaseId", "costoDomo", "margenDomo", "insumoDomoId",
+    "costoBranding", "margenBranding", "insumoBrandingId",
     "activo", "orden",
   ],
 }));

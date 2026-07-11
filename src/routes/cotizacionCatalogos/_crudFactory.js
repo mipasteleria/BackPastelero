@@ -49,7 +49,7 @@ function crudFactory({ Model, camposEditables, populate = [], recostearReceta = 
 
   // Campos ObjectId: un "" del <select> vacío debe guardarse como null,
   // si no Mongoose lanza CastError y la creación/edición falla.
-  const OBJECTID_FIELDS = new Set(["recetaId", "tecnicaCreativaId"]);
+  const OBJECTID_FIELDS = new Set(["recetaId", "tecnicaCreativaId", "insumoBaseId", "insumoDomoId", "insumoBrandingId"]);
   const pickEditables = (body) => {
     const out = {};
     for (const k of camposEditables) {
