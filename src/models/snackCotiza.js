@@ -75,10 +75,9 @@ const snacksSchema = new mongoose.Schema(
     contactPhone: {
       type: String,
       required: true,
-      match: [
-        /^\d{3}-\d{3}-\d{4}$/,
-        "Invalid phone number format. Use 000-000-0000",
-      ],
+      // Normaliza a solo dígitos (acepta formato viejo con guiones y +52).
+      set: (v) => String(v || "").replace(/\D/g, "").replace(/^52(?=\d{10}$)/, ""),
+      match: [/^\d{10}$/, "El teléfono debe tener 10 dígitos"],
     },
     questionsOrComments: {
       type: String,

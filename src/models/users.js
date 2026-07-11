@@ -33,9 +33,13 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       required: true,
+      // Normaliza lo que llegue (guiones, espacios, +52) a solo dígitos —
+      // los usuarios registrados con el formato viejo XXX-XXX-XXXX siguen
+      // siendo válidos al re-guardar.
+      set: (v) => String(v || "").replace(/\D/g, "").replace(/^52(?=\d{10}$)/, ""),
       match: [
-        /^\d{3}-\d{3}-\d{4}$/,
-        "Phone number not valid. Must be in the format 000-000-0000",
+        /^\d{10}$/,
+        "El teléfono debe tener 10 dígitos (sin espacios ni guiones)",
       ],
     },
     resetPasswordToken: {
