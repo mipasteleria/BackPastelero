@@ -146,7 +146,7 @@ router.use("/formas", crudFactory({
 
 router.use("/colores", crudFactory({
   Model: Color,
-  camposEditables: ["slug", "nombre", "hex", "imagenUrl", "costo", "margen", "activo", "orden"],
+  camposEditables: ["slug", "nombre", "hex", "imagenUrl", "variantes", "costo", "margen", "activo", "orden"],
 }));
 
 router.use("/decoraciones", crudFactory({
