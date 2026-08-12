@@ -10,7 +10,23 @@ const varianteColorSchema = new mongoose.Schema(
   {
     nombre: { type: String, required: true, trim: true }, // "Azul"
     hex:    { type: String, default: "#FFFFFF" },
-    imagenUrl: { type: String, default: "" },             // PNG sin fondo de esa variante
+    imagenUrl: { type: String, default: "" },             // PNG general (respaldo)
+    // Igual que en colores base: la silueta de la decoración cambia según
+    // forma y pisos; cada combinación puede tener su PNG. Sin variante se
+    // usa imagenUrl.
+    variantes: {
+      type: [
+        new mongoose.Schema(
+          {
+            formaSlug: { type: String, required: true, lowercase: true, trim: true },
+            niveles:   { type: Number, required: true, min: 1, max: 3 },
+            imagenUrl: { type: String, default: "" },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
   },
   { _id: false }
 );
