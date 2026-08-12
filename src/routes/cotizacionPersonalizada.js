@@ -179,15 +179,15 @@ router.post("/", async (req, res) => {
         postres,
       });
     } else if (tipoProducto === "galleta") {
-      // Galletas personalizadas: un sabor + docenas + referencias. No usan
+      // Galletas decoradas: un sabor + piezas + referencias. No usan
       // relleno/cobertura/niveles; el total de piezas va en evento.invitados
       // para que el costeo por porción funcione igual que en los demás.
-      const docenas = Math.max(1, Number(body.docenas) || 1);
-      base.evento = { ...base.evento, invitados: docenas * 12 };
+      const piezas = Math.max(1, Number(body.piezas) || 1);
+      base.evento = { ...base.evento, invitados: piezas };
       doc = await CotizacionPersonalizada.create({
         ...base,
         niveles: 1,
-        docenasGalleta: docenas,
+        piezasGalleta: piezas,
         sabor: await snapshotSabor(body.saborSlug),
         decoraciones: await snapshotDecoraciones(body.decoracionesSlugs || []),
       });
@@ -913,7 +913,7 @@ async function enviarCorreoConfirmacion(cot, metodo) {
   const detallesPedido = cot.tipoProducto === "mesa-postres"
     ? `Mesa de postres · ${cot.evento?.invitados} personas · ${(cot.postres || []).map((p) => p.nombre).join(", ")}`
     : cot.tipoProducto === "galleta"
-    ? `Galletas personalizadas · ${cot.docenasGalleta || 0} docena(s) (${cot.evento?.invitados} piezas) · Sabor: ${cot.sabor?.nombre || "—"}`
+    ? `Galletas decoradas · ${cot.piezasGalleta || cot.evento?.invitados || 0} piezas · Sabor: ${cot.sabor?.nombre || "—"}`
     : `${cot.tipoProducto === "cupcake" ? "Cupcakes" : "Pastel"} para ${cot.evento?.invitados} porciones · ` +
       `Pan: ${cot.sabor?.nombre || "—"} · Relleno: ${cot.relleno?.nombre || "—"} · Cobertura: ${cot.cobertura?.nombre || "—"}`;
 

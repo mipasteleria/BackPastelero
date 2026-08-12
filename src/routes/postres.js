@@ -100,6 +100,10 @@ const CAMPOS_EDITABLES = [
   "recetaId",
   "cantidadReceta",
   "costoEmpaque",
+  "categoria",
+  "unidad",
+  "minimo",
+  "paso",
 ];
 
 function pickEditables(body) {
@@ -125,6 +129,16 @@ router.get("/", async (req, res) => {
     const filter = {};
     if (req.query.incluyeInactivos !== "true") filter.activo = true;
     if (req.query.destacado === "true") filter.destacado = true;
+    // ?categoria=postre|galleta separa el catálogo de postres del de
+    // galletas artesanales. Sin el parámetro devuelve ambos (compatible
+    // con lo que ya consumía el front).
+    // Los postres creados antes de existir el campo no lo tienen guardado,
+    // así que "postre" también debe cubrir los que vienen sin categoría.
+    if (req.query.categoria === "galleta") {
+      filter.categoria = "galleta";
+    } else if (req.query.categoria === "postre") {
+      filter.categoria = { $ne: "galleta" };
+    }
 
     const postres = await Postre.find(filter).sort({ orden: 1, createdAt: -1 });
     res.json({ data: postres });

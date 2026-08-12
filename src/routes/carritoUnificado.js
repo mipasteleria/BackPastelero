@@ -133,7 +133,9 @@ router.post("/checkout", async (req, res) => {
           const p = postreMap.get(String(it.postreId));
           if (!p) throw new Error(`Postre ${idx + 1} no disponible`);
           const cantidad = Number(it.cantidad);
-          if (!cantidad || cantidad < 1) throw new Error(`Cantidad inválida para "${p.nombre}"`);
+          // Mismas reglas de unidad/mínimo/incremento que el checkout directo.
+          const reglaCantidad = require("../utils/cantidadVenta").validarCantidad(p, cantidad);
+          if (!reglaCantidad.ok) throw new Error(reglaCantidad.error);
           const subtotal = round2(Number(p.precio) * cantidad);
           itemsNorm.push({ postreId: p._id, slug: p.slug, nombre: p.nombre, precioUnitario: Number(p.precio), cantidad, subtotal });
           subtotalProductos += subtotal;

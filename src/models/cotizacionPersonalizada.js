@@ -43,7 +43,7 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // ── Tipo de producto ─────────────────────────────────────────
     // "pastel" (default), "cupcake" (mismos catálogos que el pastel),
     // "mesa-postres" (catálogo de postres) o "galleta" (galletas
-    // personalizadas: sabor + docenas + referencias).
+    // decoradas: sabor + piezas + imágenes de referencia).
     tipoProducto: {
       type: String,
       enum: ["pastel", "cupcake", "mesa-postres", "galleta"],
@@ -66,10 +66,10 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     postresPorPersona: { type: Number, default: 1, min: 1 },
     postres: { type: [seleccionCatalogoSnap], default: [] },
 
-    // ── Galletas personalizadas ──────────────────────────────────
-    // Se piden por docena; el total de piezas se refleja en
-    // evento.invitados (docenas × 12) para reusar el costeo por porción.
-    docenasGalleta: { type: Number, default: 0, min: 0 },
+    // ── Galletas decoradas ───────────────────────────────────────
+    // Se piden por pieza (con un mínimo por pedido). El total también se
+    // refleja en evento.invitados para reusar el costeo por porción.
+    piezasGalleta: { type: Number, default: 0, min: 0 },
 
     // ── 3. Sabor del bizcocho ────────────────────────────────────
     sabor: { type: seleccionCatalogoSnap, default: null },

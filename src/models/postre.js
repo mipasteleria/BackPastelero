@@ -29,11 +29,32 @@ const postreSchema = new mongoose.Schema(
     nombre:      { type: String, required: true, trim: true },
     descripcion: { type: String, trim: true, default: "" },
 
+    // Precio por UNIDAD de venta (ver `unidad`): por pieza, por docena o
+    // por kilo según cómo se venda el producto.
     precio: {
       type: Number,
       required: true,
       min: [0, "Precio no puede ser negativo"],
     },
+
+    // ── Categoría y forma de venta ────────────────────────────────
+    // `categoria` separa el catálogo de postres del de galletas
+    // artesanales (alfajores, besos de nuez, pastisetas…). Ambas se
+    // preparan bajo pedido y comparten motor de compra.
+    categoria: {
+      type: String,
+      enum: ["postre", "galleta"],
+      default: "postre",
+    },
+    // Unidad de venta. `minimo` y `paso` permiten reglas como "mínimo 6
+    // piezas", "mínimo 12" o "desde 1/2 kilo en múltiplos de 1/2".
+    unidad: {
+      type: String,
+      enum: ["pieza", "docena", "kg"],
+      default: "pieza",
+    },
+    minimo: { type: Number, default: 1, min: [0, "El mínimo no puede ser negativo"] },
+    paso:   { type: Number, default: 1, min: [0, "El incremento no puede ser negativo"] },
 
     // ── Costeo opcional desde receta ──────────────────────────────
     // Si `recetaId` está presente, el sistema puede sugerir un precio

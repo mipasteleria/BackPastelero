@@ -84,8 +84,11 @@ router.post("/checkout", async (req, res) => {
         return res.status(400).json({ message: `Postre ${idx + 1} no disponible o eliminado` });
       }
       const cantidad = Number(it.cantidad);
-      if (!cantidad || cantidad < 1) {
-        return res.status(400).json({ message: `Cantidad inválida para "${p.nombre}"` });
+      // Respeta unidad/mínimo/incremento del producto (ej. galletas
+      // artesanales desde 6 piezas, o peso en múltiplos de 1/2 kg).
+      const reglaCantidad = require("../utils/cantidadVenta").validarCantidad(p, cantidad);
+      if (!reglaCantidad.ok) {
+        return res.status(400).json({ message: reglaCantidad.error });
       }
       const precioUnitario = Number(p.precio);
       const subtotal = Math.round(precioUnitario * cantidad * 100) / 100;
