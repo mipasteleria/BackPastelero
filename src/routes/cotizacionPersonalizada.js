@@ -26,7 +26,7 @@ const DATOS_BANCARIOS = {
   tarjeta: "5256 7839 9715 6998",
 };
 
-const PREFIJO_ORDEN = { pastel: "PAS", cupcake: "CUP", "mesa-postres": "SNA" };
+const PREFIJO_ORDEN = { pastel: "PAS", cupcake: "CUP", "mesa-postres": "SNA", galleta: "GAL" };
 
 // Multiplicador de complejidad por número de pisos. Mismo valor que usa
 // el front en cakePersonalizado.jsx para que el estimado del cliente
@@ -137,7 +137,7 @@ async function snapshotPostres(slugs) {
 router.post("/", async (req, res) => {
   try {
     const body = req.body || {};
-    const tipoProducto = ["pastel", "cupcake", "mesa-postres"].includes(body.tipoProducto)
+    const tipoProducto = ["pastel", "cupcake", "mesa-postres", "galleta"].includes(body.tipoProducto)
       ? body.tipoProducto
       : "pastel";
 
@@ -177,6 +177,19 @@ router.post("/", async (req, res) => {
         ...base,
         postresPorPersona: body.postresPorPersona || 1,
         postres,
+      });
+    } else if (tipoProducto === "galleta") {
+      // Galletas personalizadas: un sabor + docenas + referencias. No usan
+      // relleno/cobertura/niveles; el total de piezas va en evento.invitados
+      // para que el costeo por porción funcione igual que en los demás.
+      const docenas = Math.max(1, Number(body.docenas) || 1);
+      base.evento = { ...base.evento, invitados: docenas * 12 };
+      doc = await CotizacionPersonalizada.create({
+        ...base,
+        niveles: 1,
+        docenasGalleta: docenas,
+        sabor: await snapshotSabor(body.saborSlug),
+        decoraciones: await snapshotDecoraciones(body.decoracionesSlugs || []),
       });
     } else {
       // pastel y cupcake comparten los mismos catálogos.
@@ -899,6 +912,8 @@ async function enviarCorreoConfirmacion(cot, metodo) {
 
   const detallesPedido = cot.tipoProducto === "mesa-postres"
     ? `Mesa de postres · ${cot.evento?.invitados} personas · ${(cot.postres || []).map((p) => p.nombre).join(", ")}`
+    : cot.tipoProducto === "galleta"
+    ? `Galletas personalizadas · ${cot.docenasGalleta || 0} docena(s) (${cot.evento?.invitados} piezas) · Sabor: ${cot.sabor?.nombre || "—"}`
     : `${cot.tipoProducto === "cupcake" ? "Cupcakes" : "Pastel"} para ${cot.evento?.invitados} porciones · ` +
       `Pan: ${cot.sabor?.nombre || "—"} · Relleno: ${cot.relleno?.nombre || "—"} · Cobertura: ${cot.cobertura?.nombre || "—"}`;
 

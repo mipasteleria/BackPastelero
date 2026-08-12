@@ -66,7 +66,7 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
       ...vintage.map((p) => ({ dia: diaISO(p.fecha), tipo: "vintage", icono: "🎀", id: String(p._id), numeroOrden: p.numeroOrden, cliente: p.cliente?.nombre, hora: p.envio?.hora || "", total: p.total })),
       ...cotizaciones.map((p) => ({
         dia: diaISO(p.evento.fecha), tipo: "cotizacion",
-        icono: p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : "🎂",
+        icono: p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : p.tipoProducto === "galleta" ? "🍪" : "🎂",
         id: String(p._id), numeroOrden: p.numeroOrden, cliente: p.cliente?.nombre, hora: p.entrega?.hora || "", total: p.precio || 0,
       })),
     ];
@@ -103,9 +103,9 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
     postres.forEach((p) => (p.items || []).forEach((it) => add(it.nombre, it.cantidad, "🍮")));
     vintage.forEach(() => add("Pastel Vintage", 1, "🎀"));
     cotizaciones.forEach((p) => add(
-      p.tipoProducto === "cupcake" ? "Cupcakes personalizados" : p.tipoProducto === "mesa-postres" ? "Mesa de postres" : "Pastel personalizado",
+      p.tipoProducto === "cupcake" ? "Cupcakes personalizados" : p.tipoProducto === "mesa-postres" ? "Mesa de postres" : p.tipoProducto === "galleta" ? "Galletas personalizadas" : "Pastel personalizado",
       1,
-      p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : "🎂"
+      p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : p.tipoProducto === "galleta" ? "🍪" : "🎂"
     ));
     const topProductos = Object.entries(conteo).map(([nombre, cantidad]) => ({ nombre, cantidad }))
       .sort((a, b) => b.cantidad - a.cantidad).slice(0, 8);

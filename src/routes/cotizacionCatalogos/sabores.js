@@ -25,6 +25,7 @@ const router = crudFactory({
     "paraPastel",
     "paraCupcake",
     "paraVintage",
+    "paraGalleta",
     "activo",
     "orden",
   ],
