@@ -11,6 +11,7 @@ const OrderCounter = require("../models/orderCounter");
  *   SNA-07MAY26-0004  (Mesa de postres / Snack)
  *   VIN-08MAY26-0005  (Vintage Cake)
  *   POS-09MAY26-0006  (Postre del catálogo Top Postres)
+ *   GAL-09MAY26-0007  (Galletas decoradas)
  *
  * El consecutivo es global (compartido entre TODOS los productos) y nunca
  * se reinicia — garantiza unicidad absoluta.
@@ -23,7 +24,7 @@ const MESES_ABREV = [
   "JUL", "AGO", "SEP", "OCT", "NOV", "DIC",
 ];
 
-const PREFIJOS_VALIDOS = new Set(["GNY", "PAS", "CUP", "SNA", "VIN", "POS"]);
+const PREFIJOS_VALIDOS = new Set(["GNY", "PAS", "CUP", "SNA", "VIN", "POS", "GAL"]);
 
 async function generarNumeroOrden(prefijo) {
   const pfx = String(prefijo || "").toUpperCase();

@@ -103,7 +103,7 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
     postres.forEach((p) => (p.items || []).forEach((it) => add(it.nombre, it.cantidad, "🍮")));
     vintage.forEach(() => add("Pastel Vintage", 1, "🎀"));
     cotizaciones.forEach((p) => add(
-      p.tipoProducto === "cupcake" ? "Cupcakes personalizados" : p.tipoProducto === "mesa-postres" ? "Mesa de postres" : p.tipoProducto === "galleta" ? "Galletas personalizadas" : "Pastel personalizado",
+      p.tipoProducto === "cupcake" ? "Cupcakes personalizados" : p.tipoProducto === "mesa-postres" ? "Mesa de postres" : p.tipoProducto === "galleta" ? "Galletas decoradas" : "Pastel personalizado",
       1,
       p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : p.tipoProducto === "galleta" ? "🍪" : "🎂"
     ));

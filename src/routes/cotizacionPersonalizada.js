@@ -382,6 +382,20 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
     const body = req.body || {};
     const update = { ...body };
 
+    // Auto-reparación: si la cotización quedó sin número de orden (p.ej.
+    // porque el contador falló al crearla), se le asigna uno al guardar.
+    if (!body.numeroOrden) {
+      const actual = await CotizacionPersonalizada.findById(req.params.id).select("numeroOrden tipoProducto");
+      if (actual && !actual.numeroOrden) {
+        try {
+          const { numeroOrden } = await generarNumeroOrden(PREFIJO_ORDEN[actual.tipoProducto] || "PAS");
+          update.numeroOrden = numeroOrden;
+        } catch (e) {
+          console.error("No se pudo asignar numeroOrden en PUT:", e.message);
+        }
+      }
+    }
+
     // Si el admin manda slugs de catálogo (edición completa), reconstruimos
     // los snapshots — igual que al crear — y quitamos las claves *Slug.
     if (Object.prototype.hasOwnProperty.call(body, "saborSlug")) {
