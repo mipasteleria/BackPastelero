@@ -83,6 +83,11 @@ async function sendVintageConfirmation(pedido) {
   }
   const transporter = buildTransporter();
   const saldo = Number(pedido.saldoPendiente) || 0;
+  // Enlace público: el cliente consulta su pedido y liquida el saldo sin
+  // necesidad de cuenta.
+  const enlacePublico = (pedido.publicToken && process.env.FRONT_DOMAIN)
+    ? `${process.env.FRONT_DOMAIN.replace(/\/$/, "")}/vintage/ver/${pedido.publicToken}`
+    : "";
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;border:1px solid #ffe2e7;border-radius:14px;overflow:hidden;">
@@ -111,7 +116,11 @@ async function sendVintageConfirmation(pedido) {
 
         ${pedido.notas ? `<div style="background:#FFE99B;border-radius:8px;padding:10px 14px;margin-bottom:18px;"><p style="margin:0;color:#6B4F1A;font-size:0.85rem;"><strong>Nota:</strong> ${pedido.notas}</p></div>` : ""}
 
-        ${saldo > 0 ? `<div style="background:#fff;border:1px solid #F3C0C6;border-radius:10px;padding:12px 16px;margin-bottom:18px;"><p style="margin:0;color:#B23A48;font-size:0.88rem;line-height:1.6;">Recuerda que queda un <strong>saldo pendiente de ${money(saldo)}</strong>, a liquidar antes de la entrega.</p></div>` : ""}
+        ${saldo > 0 ? `
+          <div style="background:#fff;border:1px solid #F3C0C6;border-radius:10px;padding:12px 16px;margin-bottom:18px;">
+            <p style="margin:0 0 10px;color:#B23A48;font-size:0.88rem;line-height:1.6;">Recuerda que queda un <strong>saldo pendiente de ${money(saldo)}</strong>, a liquidar antes de la entrega.</p>
+            ${enlacePublico ? `<a href="${enlacePublico}" style="display:inline-block;padding:10px 22px;background:#540027;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.85rem;">Ver mi pedido y pagar el saldo</a>` : ""}
+          </div>` : ""}
 
         <div style="text-align:center;margin:24px 0 8px;">
           <a href="${WHATSAPP_LINK}?text=${encodeURIComponent(`Hola, mi número de orden Vintage es ${pedido.numeroOrden}`)}" style="display:inline-block;padding:12px 26px;background:#25D366;color:#fff;text-decoration:none;border-radius:999px;font-weight:700;font-size:0.9rem;">💬 Contactar por WhatsApp</a>

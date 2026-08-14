@@ -48,6 +48,9 @@ const pedidoVintageSchema = new mongoose.Schema(
 
     status: { type: String, default: "Pendiente" },
     calendarEventId: { type: String, default: "" },
+    // Enlace público para que el cliente consulte su pedido y liquide el
+    // saldo sin necesidad de cuenta (mismo patrón que cotizacionPersonalizada).
+    publicToken: { type: String, default: null, index: true },
     reminderSentAt:  { type: Date },
     confirmacionEnviadaAt: { type: Date }, // guard: evita reenviar el correo de confirmación
     notasInternas: { type: [notaInternaSchema], default: [] },

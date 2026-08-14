@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const router = express.Router();
 const Pedido = require("../../models/vintage/pedido");
 const checkRoleToken = require("../../middlewares/myRoleToken");
@@ -63,11 +64,78 @@ router.post("/", async (req, res) => {
       fecha: body.fecha || null,
       notas: body.notas || "",
       status: "Pendiente",
+      publicToken: crypto.randomBytes(16).toString("hex"),
     });
 
     res.status(201).json({ message: "Pedido creado", data: { _id: doc._id, total, anticipo, numeroOrden } });
   } catch (e) {
     console.error("Error creando pedido vintage:", e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
+/**
+ * GET /publico/:token — vista del cliente (sin cuenta).
+ *
+ * Quien tiene el enlace puede consultar su pedido y liquidar el saldo.
+ * Nunca expone costos internos ni notas.
+ */
+router.get("/publico/:token", async (req, res) => {
+  try {
+    const doc = await Pedido.findOne({ publicToken: req.params.token })
+      .select("-notasInternas -totalCosto -desglose.costo -desglose.margen -userId -__v");
+    if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
+    res.json({ data: doc });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * POST /:id/enlace-publico — el admin obtiene el enlace para compartir.
+ * Genera el token si el pedido es anterior a esta función.
+ */
+router.post("/:id/enlace-publico", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const doc = await Pedido.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
+    if (!doc.publicToken) {
+      doc.publicToken = crypto.randomBytes(16).toString("hex");
+      await doc.save();
+    }
+    res.json({ data: { publicToken: doc.publicToken } });
+  } catch (e) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+/**
+ * PUT /:id/liquidar-saldo — el admin registra el pago del saldo recibido
+ * fuera de línea (transferencia o efectivo). Deja el saldo en cero, marca
+ * el pedido como pagado al 100% y registra el movimiento como nota interna.
+ */
+router.put("/:id/liquidar-saldo", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const { metodo = "otro", referencia = "" } = req.body || {};
+    const doc = await Pedido.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const saldoPrevio = Number(doc.saldoPendiente) || 0;
+    doc.anticipo = Number(doc.total) || 0;   // queda cubierto en su totalidad
+    doc.saldoPendiente = 0;
+    if (!/^Cancelado/.test(doc.status || "")) doc.status = "Agendado con el 100%";
+    doc.notasInternas.push({
+      texto: `Saldo liquidado ($${saldoPrevio.toLocaleString("es-MX")}) vía ${metodo}${referencia ? ` · Ref: ${referencia}` : ""}.`,
+      autorId: String(req.user?._id || ""),
+      autorNombre: req.user?.name || "Admin",
+      autorEmail: req.user?.email || "",
+    });
+    await doc.save();
+    syncVintageCalendar(Pedido, doc);
+
+    res.json({ message: "Saldo liquidado", data: doc });
+  } catch (e) {
+    console.error("Error liquidando saldo vintage:", e);
     res.status(400).json({ message: e.message });
   }
 });

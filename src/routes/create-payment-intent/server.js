@@ -43,22 +43,36 @@ function getCotizaModel(type) {
  */
 router.post("/vintage-checkout", async (req, res) => {
   try {
-    const { pedidoId, paymentOption } = req.body;
-    if (!pedidoId || !["anticipo", "total"].includes(paymentOption)) {
+    // `token` permite pagar desde el enlace público (sin cuenta).
+    const { pedidoId, paymentOption, token } = req.body;
+    if (!["anticipo", "total", "saldo"].includes(paymentOption)) {
       return res.status(400).json({ message: "Datos inválidos" });
     }
-    const pedido = await VintagePedido.findById(pedidoId);
+    const pedido = token
+      ? await VintagePedido.findOne({ publicToken: token })
+      : (pedidoId ? await VintagePedido.findById(pedidoId) : null);
     if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
 
     const precio = Number(pedido.total) || 0;
     if (precio <= 0) return res.status(400).json({ message: "El pedido no tiene total" });
     const anticipo = pedido.anticipo != null ? Number(pedido.anticipo) : Math.round(precio * 0.5);
 
-    const previosPaid = await Payment.find({ cotizacionId: pedido._id, cotizacionType: "Vintage", status: "paid" });
-    if (previosPaid.length) return res.status(409).json({ message: "Este pedido ya tiene pagos." });
+    // El saldo es un SEGUNDO pago legítimo, así que solo bloqueamos pagos
+    // repetidos cuando se intenta volver a cobrar el anticipo o el total.
+    if (paymentOption !== "saldo") {
+      const previosPaid = await Payment.find({ cotizacionId: pedido._id, cotizacionType: "Vintage", status: "paid" });
+      if (previosPaid.length) return res.status(409).json({ message: "Este pedido ya tiene pagos." });
+    }
 
-    const amount = paymentOption === "total" ? precio : anticipo;
-    const returnTo = `${FRONT_DOMAIN}/enduser/pastel-vintage?pedido=${pedido._id}&pago=ok`;
+    const saldo = Number(pedido.saldoPendiente) || 0;
+    if (paymentOption === "saldo" && saldo <= 0) {
+      return res.status(409).json({ message: "Este pedido ya está pagado por completo." });
+    }
+
+    const amount = paymentOption === "total" ? precio : paymentOption === "saldo" ? saldo : anticipo;
+    const returnTo = pedido.publicToken
+      ? `${FRONT_DOMAIN}/vintage/ver/${pedido.publicToken}?pago=ok`
+      : `${FRONT_DOMAIN}/enduser/pastel-vintage?pedido=${pedido._id}&pago=ok`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -73,7 +87,9 @@ router.post("/vintage-checkout", async (req, res) => {
         quantity: 1,
       }],
       success_url: returnTo,
-      cancel_url: `${FRONT_DOMAIN}/enduser/pastel-vintage?pago=cancelado`,
+      cancel_url: pedido.publicToken
+        ? `${FRONT_DOMAIN}/vintage/ver/${pedido.publicToken}?pago=cancelado`
+        : `${FRONT_DOMAIN}/enduser/pastel-vintage?pago=cancelado`,
       metadata: { cotizacionId: String(pedido._id), cotizacionType: "Vintage", paymentOption, userId: pedido.userId || "" },
     });
 
