@@ -130,6 +130,63 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
   }
 });
 
+/**
+ * PUT /:id/configuracion — admin edita la solicitud del cliente.
+ *
+ * Recalcula el desglose y los totales con los mismos precios vivos que usa
+ * el checkout (cotizarVintage + resolverZona), para que editar el pastel o
+ * la entrega no deje el precio desfasado. Conserva lo ya cobrado: el
+ * anticipo no se toca y el saldo se recalcula sobre el total nuevo.
+ */
+router.put("/:id/configuracion", checkRoleToken("admin"), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const doc = await Pedido.findById(req.params.id);
+    if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const sel = { ...(doc.seleccion || {}), ...(body.seleccion || {}) };
+    const cot = await cotizarVintage(sel);
+    if (cot.total <= 0) return res.status(400).json({ message: "No se pudo calcular el precio con esa configuración" });
+
+    // Entrega (si viene). El costo de envío se resuelve por zona.
+    const entrada = body.envio || {};
+    const envio = {
+      tipo:      entrada.tipo      ?? doc.envio?.tipo      ?? "recoger-local",
+      colonia:   entrada.colonia   ?? doc.envio?.colonia   ?? "",
+      municipio: entrada.municipio ?? doc.envio?.municipio ?? "",
+      direccion: entrada.direccion ?? doc.envio?.direccion ?? "",
+      hora:      entrada.hora      ?? doc.envio?.hora      ?? "",
+      zona: "", costo: 0,
+    };
+    if (envio.tipo === "domicilio") {
+      const z = resolverZona({ colonia: envio.colonia, municipio: envio.municipio });
+      envio.zona = z.zona; envio.costo = z.costo;
+    }
+
+    const total = round2(cot.total + envio.costo);
+
+    doc.seleccion      = { ...sel, porciones: cot.porciones };
+    doc.desglose       = cot.items;
+    doc.totalProductos = cot.total;
+    doc.totalCosto     = cot.totalCosto;
+    doc.envio          = envio;
+    doc.total          = total;
+    doc.precio         = total;
+    doc.saldoPendiente = Math.max(round2(total - (Number(doc.anticipo) || 0)), 0);
+    if (body.fecha !== undefined) doc.fecha = body.fecha || null;
+    if (body.notas !== undefined) doc.notas = body.notas || "";
+    if (body.cliente) doc.cliente = { ...doc.cliente.toObject?.() ?? doc.cliente, ...body.cliente };
+
+    await doc.save();
+    syncVintageCalendar(Pedido, doc);   // la fecha pudo cambiar
+
+    res.json({ message: "Configuración actualizada", data: doc });
+  } catch (e) {
+    console.error("Error editando pedido vintage:", e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
 // ── DELETE admin ─────────────────────────────────────────────────
 router.delete("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
