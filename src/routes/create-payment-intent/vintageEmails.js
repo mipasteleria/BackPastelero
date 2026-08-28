@@ -15,7 +15,7 @@ function buildTransporter() {
 }
 
 const STORE_ADDRESS = "Calle Bogotá 2866a, Col. Providencia, Guadalajara, Jalisco";
-const WHATSAPP_LINK = "https://wa.me/523741025036";
+const WHATSAPP_LINK = "https://wa.me/523329295129";
 
 function formatearFechaLarga(d) {
   if (!d) return "Por confirmar";

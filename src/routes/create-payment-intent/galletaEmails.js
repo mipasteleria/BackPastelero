@@ -19,8 +19,8 @@ function buildTransporter() {
 }
 
 const STORE_ADDRESS = "Calle Bogotá 2866a, Col. Providencia, Guadalajara, Jalisco";
-const STORE_PHONE   = "374 102 5036"; // Temporal — se actualiza cuando haya línea exclusiva
-const WHATSAPP_LINK = "https://wa.me/523741025036";
+const STORE_PHONE   = "332 929 5129"; // Temporal — se actualiza cuando haya línea exclusiva
+const WHATSAPP_LINK = "https://wa.me/523329295129";
 
 /**
  * Formatea fecha como "Jueves 22 de Mayo, 2026".
