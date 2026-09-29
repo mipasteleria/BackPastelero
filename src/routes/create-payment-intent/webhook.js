@@ -4,9 +4,6 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const router = express.Router();
 
 const Payment = require("../../models/paymentModels");
-const Pastel = require("../../models/pastelCotiza");
-const Cupcake = require("../../models/cupcakesCotiza");
-const Snack = require("../../models/snackCotiza");
 const Personalizada = require("../../models/cotizacionPersonalizada");
 const VintagePedido = require("../../models/vintage/pedido");
 const GalletaPedido = require("../../models/galletaPedido");
@@ -42,12 +39,6 @@ const { syncPersonalizadaCalendar, syncVintageCalendar } = require("../../utils/
  */
 function getCotizaModel(type) {
   switch (type) {
-    case "Pastel":
-      return Pastel;
-    case "Cupcake":
-      return Cupcake;
-    case "Snack":
-      return Snack;
     case "Personalizada":
       return Personalizada;
     case "Vintage":

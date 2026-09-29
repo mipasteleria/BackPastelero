@@ -5,9 +5,8 @@ const notaInternaSchema = require("./notaInternaSchema");
  * CotizacionPersonalizada — modelo unificado del rediseño 2026 de
  * `/cotizacion`.
  *
- * Reemplaza a futuro al viejo `pastelCotiza` pero NO lo borra (los
- * registros históricos siguen funcionando). Las nuevas cotizaciones que
- * vienen de la maqueta game-like se guardan aquí.
+ * Único modelo de cotización del sistema. Reemplazó a los modelos legacy
+ * (pastelCotiza / cupcakesCotiza / snackCotiza), ya retirados.
  *
  * Estructura: las 9 secciones de la maqueta + cliente + admin metadata.
  *
@@ -219,7 +218,7 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // El uso operativo del pedido no depende de esto.
     aceptaContacto:         { type: Boolean, default: false },
 
-    // Notas internas append-only (mismo patrón que pastelCotiza)
+    // Notas internas append-only (admin-only, nunca al cliente)
     notasInternas: { type: [notaInternaSchema], default: [] },
   },
   { timestamps: true }
