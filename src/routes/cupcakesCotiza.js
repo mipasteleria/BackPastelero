@@ -11,7 +11,13 @@ const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
 mountNotaInternaRoutes(router, Prices, "Cotización Cupcake");
 
 //Enviar Cotización Cupcake
-router.post("/", async (req, res) => {
+// ── Flujo legacy (reemplazado por /cotizacion-personalizada) ──────
+// Ya ningún formulario del sitio escribe aquí. Se cierran la creación y la
+// lectura por id, que estaban abiertas al público: eran un buzón sin dueño
+// (nadie revisa esta colección) y exponían el contacto de solicitudes
+// viejas a quien tuviera el id. Se deja en admin por si hay que consultar
+// los registros históricos.
+router.post("/", checkRoleToken("admin"), async (req, res) => {
   console.log("entra al backend");
   try {
     let price = req.body;
@@ -37,7 +43,7 @@ router.get("/", requireAuth, async (req, res) => {
 });
 
 //Obtener Cotizaciones por ID Cupcake — endpoint público, esconde notas internas.
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const pricesid = await Prices.findById({ _id: id }).select("-notasInternas");
