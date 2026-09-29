@@ -19,6 +19,10 @@
     {
       "path": "/jobs/recordatorios-cotizacion",
       "schedule": "30 15 * * *"
+    },
+    {
+      "path": "/jobs/aniversario-cotizacion",
+      "schedule": "0 16 * * *"
     }
   ]
 }

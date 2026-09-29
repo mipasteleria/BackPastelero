@@ -42,6 +42,9 @@ const userSchema = new mongoose.Schema(
         "El teléfono debe tener 10 dígitos (sin espacios ni guiones)",
       ],
     },
+    // Consentimiento para recibir promociones y novedades. Separado del uso
+    // operativo de la cuenta (confirmaciones de pedido siempre se envían).
+    aceptaContacto: { type: Boolean, default: false },
     resetPasswordToken: {
       type: String,
       default: undefined,

@@ -11,7 +11,7 @@ const nodemailer = require("nodemailer");
 // `role` del cliente (sería escalada de privilegios). El rol siempre es "user".
 router.post("/", async (req, res) => {
   try {
-    const { name, lastname, email, password, phone } = req.body || {};
+    const { name, lastname, email, password, phone, aceptaContacto } = req.body || {};
 
     if (!name || !lastname || !email || !password || !phone) {
       return res
@@ -27,6 +27,7 @@ router.post("/", async (req, res) => {
       password: hashed,
       phone,
       role: "user",
+      aceptaContacto: !!aceptaContacto,
     });
     await newUser.save();
 

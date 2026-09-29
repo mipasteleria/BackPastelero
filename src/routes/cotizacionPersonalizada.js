@@ -160,6 +160,10 @@ router.post("/", async (req, res) => {
       userId: body.userId || "",
       validUntil,
       publicToken: crypto.randomBytes(16).toString("hex"),
+      // Consentimiento explícito para contactarle con novedades. No
+      // condiciona el pedido: sin él igual se cotiza, solo no se envían
+      // correos promocionales (p. ej. el de aniversario).
+      aceptaContacto: !!body.aceptaContacto,
     };
 
     // Número de orden legible (no rompe la creación si el contador falla).

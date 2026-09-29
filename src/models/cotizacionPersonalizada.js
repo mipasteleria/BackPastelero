@@ -212,6 +212,12 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // uno 7 días antes del evento y "última oportunidad" 3 días antes.
     recordatorioSemanaAt:   { type: Date, default: null },
     recordatorioTresDiasAt: { type: Date, default: null },
+    // Correo de aniversario (1 año después de la solicitud). Guard para no
+    // reenviarlo; solo se manda si el cliente aceptó recibir novedades.
+    aniversarioEnviadoAt:   { type: Date, default: null },
+    // Consentimiento explícito para contactarle con promociones/novedades.
+    // El uso operativo del pedido no depende de esto.
+    aceptaContacto:         { type: Boolean, default: false },
 
     // Notas internas append-only (mismo patrón que pastelCotiza)
     notasInternas: { type: [notaInternaSchema], default: [] },

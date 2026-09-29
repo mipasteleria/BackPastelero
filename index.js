@@ -13,6 +13,7 @@ const mongoDB = require("./src/database/db.js");
 const { startReminderCron } = require("./src/jobs/reminderCron");
 const { startImagenesCleanupCron, runImagenesCleanup } = require("./src/jobs/imagenesCleanup");
 const { startCotizacionRemindersCron, runCotizacionReminders } = require("./src/jobs/cotizacionReminders");
+const { startAniversarioCotizacionCron, runAniversarioCotizacion } = require("./src/jobs/aniversarioCotizacion");
 const usersRoutes = require("./src/routes/users.js");
 const pricesCakeRoutes = require("./src/routes/pastelCotiza.js");
 const pricesCupcakesRoutes = require("./src/routes/cupcakesCotiza.js");
@@ -135,6 +136,7 @@ app.use("/carrito", require("./src/routes/carritoUnificado"));
 const cursosRoutes = require("./src/routes/cursos");
 app.use("/cursos", cursosRoutes);
 app.use("/", require("./src/routes/dashboardAgenda")); // /fechas-bloqueadas + /dashboard-agenda
+app.use("/mis-pedidos", require("./src/routes/misPedidos"));
 
 /**
  * GET /video-stream/:token/<path> — sirve los archivos HLS/DASH del bucket
@@ -462,6 +464,23 @@ app.all("/jobs/recordatorios-cotizacion", async (req, res) => {
   }
 });
 
+// Correo de aniversario de cotización (1 año después) — Vercel Cron.
+app.all("/jobs/aniversario-cotizacion", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const provided =
+    req.headers.authorization?.replace(/^Bearer\s+/i, "") || req.query.secret;
+  if (!secret || provided !== secret) {
+    return res.status(401).json({ error: "No autorizado" });
+  }
+  try {
+    const enviados = await runAniversarioCotizacion();
+    res.json({ message: "Aniversarios ejecutados", enviados });
+  } catch (e) {
+    console.error("[/jobs/aniversario-cotizacion] error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).send({ message: "Something broke!" });
@@ -476,6 +495,7 @@ if (!process.env.VERCEL) {
       startReminderCron();
       startImagenesCleanupCron();
       startCotizacionRemindersCron();
+      startAniversarioCotizacionCron();
       app.listen(port, () => {
         console.log("Server is listening on port", port);
       });
