@@ -280,7 +280,14 @@ router.get("/public/:token", async (req, res) => {
   try {
     const doc = await CotizacionPersonalizada.findOne({ publicToken: req.params.token }).select(PROJ_PUBLICA);
     if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
-    res.json({ data: doc });
+
+    // Si ya calificó, se devuelve para que el formulario aparezca prellenado
+    // en vez de pedirle la reseña otra vez.
+    const Resena = require("../models/resena");
+    const resena = await Resena.findOne({ "pedido.pedidoId": doc._id, "pedido.tipo": "cotizacion" })
+      .select("rating texto createdAt");
+
+    res.json({ data: doc, resena: resena ? { rating: resena.rating, texto: resena.texto } : null });
   } catch (e) {
     console.error("Error obteniendo cotización pública:", e);
     res.status(500).json({ message: e.message });
@@ -311,6 +318,71 @@ router.post("/public/:token/confirmar", async (req, res) => {
     res.json({ message: "Confirmación registrada", data: { confirmado: true, metodo } });
   } catch (e) {
     console.error("Error confirmando cotización pública:", e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
+/**
+ * POST /public/:token/resena — el cliente califica su pedido entregado.
+ *
+ * Se atiende desde el enlace público, sin cuenta: tener el token ya prueba
+ * que el pedido es suyo. Solo se habilita cuando el status es "Entregado",
+ * de modo que nadie reseñe algo que aún no recibió.
+ *
+ * Es idempotente: si ya dejó una reseña, la actualiza en lugar de duplicar.
+ */
+router.post("/public/:token/resena", async (req, res) => {
+  try {
+    const rating = Number(req.body?.rating);
+    const texto = String(req.body?.texto || "").trim().slice(0, 1000);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "La calificación debe ser de 1 a 5 estrellas" });
+    }
+
+    const cot = await CotizacionPersonalizada.findOne({ publicToken: req.params.token });
+    if (!cot) return res.status(404).json({ message: "Cotización no encontrada" });
+    if (cot.status !== "Entregado") {
+      return res.status(409).json({ message: "Podrás dejar tu reseña cuando tu pedido esté entregado." });
+    }
+
+    const Resena = require("../models/resena");
+    const NOMBRE_PRODUCTO = {
+      pastel: "Pastel personalizado",
+      cupcake: "Cupcakes personalizados",
+      "mesa-postres": "Mesa de postres",
+      galleta: "Galletas decoradas",
+    };
+
+    const datos = {
+      usuario: {
+        userId: cot.userId || null,
+        nombre: cot.cliente?.nombre || "Cliente",
+        email: cot.cliente?.email || "",
+      },
+      producto: {
+        tipo: "cotizacion",
+        productoId: cot._id,
+        slug: cot.tipoProducto || "pastel",
+        nombre: NOMBRE_PRODUCTO[cot.tipoProducto] || "Pedido personalizado",
+      },
+      pedido: { pedidoId: cot._id, tipo: "cotizacion", numeroOrden: cot.numeroOrden || "" },
+      rating,
+      texto,
+    };
+
+    // Una reseña por cotización: si ya existe se actualiza.
+    const existente = await Resena.findOne({ "pedido.pedidoId": cot._id, "pedido.tipo": "cotizacion" });
+    if (existente) {
+      existente.rating = rating;
+      existente.texto = texto;
+      await existente.save();
+      return res.json({ message: "Reseña actualizada", data: { rating, texto } });
+    }
+
+    await Resena.create(datos);
+    res.status(201).json({ message: "¡Gracias por tu reseña!", data: { rating, texto } });
+  } catch (e) {
+    console.error("Error guardando reseña pública:", e);
     res.status(400).json({ message: e.message });
   }
 });

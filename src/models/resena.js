@@ -34,7 +34,10 @@ const resenaSchema = new mongoose.Schema(
       tipo: {
         type: String,
         required: true,
-        enum: ["postre", "galleta"],
+        // "cotizacion" es el pastel/cupcakes/mesa que se hizo a medida: no
+        // es un producto de catálogo, así que productoId apunta a la
+        // cotización y no aparece en los ratings por producto.
+        enum: ["postre", "galleta", "cotizacion"],
       },
       productoId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -49,7 +52,7 @@ const resenaSchema = new mongoose.Schema(
     // tipo: "galleta" → pedidoId apunta a galletaPedido
     pedido: {
       pedidoId: { type: mongoose.Schema.Types.ObjectId, required: true },
-      tipo:     { type: String, required: true, enum: ["postre", "galleta"] },
+      tipo:     { type: String, required: true, enum: ["postre", "galleta", "cotizacion"] },
       numeroOrden: { type: String, default: "" },
     },
 
