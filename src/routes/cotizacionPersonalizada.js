@@ -15,6 +15,7 @@ const { syncPersonalizadaCalendar } = require("../utils/pedidoCalendarSync");
 const { mountNotaInternaRoutes } = require("../utils/notaInternaRoute");
 const nodemailer = require("nodemailer");
 const { generarNumeroOrden } = require("../utils/orderNumber");
+const { recortarSabores } = require("../utils/saboresPorPorciones");
 
 // Datos bancarios para anticipo por transferencia (se envían por correo).
 const DATOS_BANCARIOS = {
@@ -58,6 +59,23 @@ async function snapshotSabor(slug) {
     nombre: s.nombre,
     costoSnapshot: s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? null,
   };
+}
+
+// Varios sabores (pastel grande). Conserva el orden elegido por el cliente.
+async function snapshotSabores(slugs) {
+  const lista = (Array.isArray(slugs) ? slugs : []).filter(Boolean);
+  if (lista.length === 0) return [];
+  const docs = await SaborCotiza.find({ slug: { $in: lista }, activo: true });
+  const porSlug = new Map(docs.map((d) => [d.slug, d]));
+  return lista
+    .map((slug) => porSlug.get(slug))
+    .filter(Boolean)
+    .map((s) => ({
+      catalogoId: s._id,
+      slug: s.slug,
+      nombre: s.nombre,
+      costoSnapshot: s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? null,
+    }));
 }
 
 async function snapshotRelleno(slug) {
@@ -209,7 +227,12 @@ router.post("/", async (req, res) => {
           ? { catalogoId: extra.saboresCupcake[0].catalogoId, slug: extra.saboresCupcake[0].slug, nombre: extra.saboresCupcake[0].nombre, costoSnapshot: extra.saboresCupcake[0].costoSnapshot }
           : null;
       } else {
-        extra.sabor = await snapshotSabor(body.saborSlug);
+        // El cliente puede combinar varios sabores según el tamaño; el
+        // servidor recorta por si el formulario fue manipulado.
+        const pedidos = body.saboresSlugs?.length ? body.saboresSlugs : [body.saborSlug];
+        const permitidos = recortarSabores(pedidos, base.evento?.invitados);
+        extra.sabores = await snapshotSabores(permitidos);
+        extra.sabor = extra.sabores[0] || null;
       }
       doc = await CotizacionPersonalizada.create({
         ...base,
@@ -593,6 +616,35 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       costoBizcocho = round2(costoBizcocho);
       precioBizcocho = round2(precioBizcocho);
       bizcochoDetalle = { porSabor: detalles };
+    } else if ((cot.sabores || []).length > 1) {
+      // Pastel con varios sabores: las porciones se reparten en partes
+      // iguales y cada sabor se costea con su propio margen de receta.
+      const detalles = [];
+      const porcionesPorSabor = inv / cot.sabores.length;
+      for (const fila of cot.sabores) {
+        let unitario = 0, margenPct = markup, fuente = "manual", recetaNombre = null;
+        const s = fila.catalogoId ? await SaborCotiza.findById(fila.catalogoId).populate("recetaId") : null;
+        if (s) {
+          if (s.recetaId && s.recetaId.portions > 0) {
+            unitario = s.recetaId.total_cost / s.recetaId.portions;
+            margenPct = s.recetaId.profit_margin ?? markup;
+            fuente = "receta"; recetaNombre = s.recetaId.nombre_receta;
+          } else {
+            unitario = s.costoUnitarioSnapshot ?? s.costoManualPorPorcion ?? 0;
+          }
+        }
+        const costo = round2(unitario * porcionesPorSabor * mult);
+        const precio = precioConMargen(costo, margenPct);
+        costoBizcocho += costo; precioBizcocho += precio;
+        detalles.push({
+          slug: fila.slug, nombre: fila.nombre,
+          porciones: round2(porcionesPorSabor),
+          costoUnitario: round2(unitario), costo, margenPct, precio, fuente, recetaNombre,
+        });
+      }
+      costoBizcocho = round2(costoBizcocho);
+      precioBizcocho = round2(precioBizcocho);
+      bizcochoDetalle = { porSabor: detalles };
     } else if (cot.sabor?.catalogoId) {
       const sabor = await SaborCotiza.findById(cot.sabor.catalogoId).populate("recetaId");
       if (sabor) {
@@ -785,7 +837,7 @@ async function enviarCorreoConfirmacion(cot, metodo) {
     : cot.tipoProducto === "galleta"
     ? `Galletas decoradas · ${cot.piezasGalleta || cot.evento?.invitados || 0} piezas · Sabor: ${cot.sabor?.nombre || "—"}`
     : `${cot.tipoProducto === "cupcake" ? "Cupcakes" : "Pastel"} para ${cot.evento?.invitados} porciones · ` +
-      `Pan: ${cot.sabor?.nombre || "—"} · Relleno: ${cot.relleno?.nombre || "—"} · Cobertura: ${cot.cobertura?.nombre || "—"}`;
+      `Pan: ${(cot.sabores || []).length > 1 ? cot.sabores.map((x) => x.nombre).join(" + ") : (cot.sabor?.nombre || "—")} · Relleno: ${cot.relleno?.nombre || "—"} · Cobertura: ${cot.cobertura?.nombre || "—"}`;
 
   const bloqueBanco = metodo === "transferencia"
     ? `

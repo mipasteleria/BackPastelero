@@ -71,7 +71,12 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     piezasGalleta: { type: Number, default: 0, min: 0 },
 
     // ── 3. Sabor del bizcocho ────────────────────────────────────
+    // `sabor` es el primero elegido; se conserva porque muchas vistas y
+    // correos lo leen directamente. `sabores` guarda la selección completa:
+    // a partir de cierto número de porciones el cliente puede combinar
+    // varios y el pastel se divide entre ellos.
     sabor: { type: seleccionCatalogoSnap, default: null },
+    sabores: { type: [seleccionCatalogoSnap], default: [] },
 
     // Cupcakes: sabor por docena (ej. 2 doc vainilla + 2 doc chocolate).
     saboresCupcake: {
