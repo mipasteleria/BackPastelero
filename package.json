@@ -1,6 +1,9 @@
 {
   "name": "pastelerosback",
   "version": "1.0.0",
+  "engines": {
+    "node": "24.x"
+  },
   "description": "backend de pasteleros",
   "main": "index.js",
   "scripts": {
