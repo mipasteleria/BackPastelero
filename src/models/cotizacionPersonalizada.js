@@ -219,6 +219,8 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
     // Correo de aniversario (1 año después de la solicitud). Guard para no
     // reenviarlo; solo se manda si el cliente aceptó recibir novedades.
     aniversarioEnviadoAt:   { type: Date, default: null },
+    // Guard de la invitación a reseñar que sale al entregar el pedido.
+    invitacionResenaAt:     { type: Date, default: null },
     // Consentimiento explícito para contactarle con promociones/novedades.
     // El uso operativo del pedido no depende de esto.
     aceptaContacto:         { type: Boolean, default: false },

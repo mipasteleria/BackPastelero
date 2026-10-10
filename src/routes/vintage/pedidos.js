@@ -9,6 +9,8 @@ const { generarNumeroOrden } = require("../../utils/orderNumber");
 const { mountNotaInternaRoutes } = require("../../utils/notaInternaRoute");
 const { syncVintageCalendar } = require("../../utils/pedidoCalendarSync");
 const { cotizarVintage } = require("./index");
+const { guardarResenaPedido, resenaDePedido } = require("../../utils/resenaPedido");
+const { enviarInvitacionResena } = require("../../utils/invitacionResena");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -65,6 +67,8 @@ router.post("/", async (req, res) => {
       notas: body.notas || "",
       status: "Pendiente",
       publicToken: crypto.randomBytes(16).toString("hex"),
+      // Opcional: habilita los correos de cortesía (invitación a reseñar).
+      aceptaContacto: !!body.aceptaContacto,
     });
 
     res.status(201).json({ message: "Pedido creado", data: { _id: doc._id, total, anticipo, numeroOrden } });
@@ -85,9 +89,36 @@ router.get("/publico/:token", async (req, res) => {
     const doc = await Pedido.findOne({ publicToken: req.params.token })
       .select("-notasInternas -totalCosto -desglose.costo -desglose.margen -userId -__v");
     if (!doc) return res.status(404).json({ message: "Pedido no encontrado" });
-    res.json({ data: doc });
+    const resena = await resenaDePedido(doc._id, "vintage");
+    res.json({ data: doc, resena });
   } catch (e) {
     res.status(500).json({ message: e.message });
+  }
+});
+
+/**
+ * POST /publico/:token/resena — el cliente califica su pastel entregado.
+ *
+ * Mismas reglas que la cotización personalizada (solo entregados, una por
+ * pedido, sin pedir cuenta): viven en utils/resenaPedido.
+ */
+router.post("/publico/:token/resena", async (req, res) => {
+  try {
+    const pedido = await Pedido.findOne({ publicToken: req.params.token });
+    if (!pedido) return res.status(404).json({ message: "Pedido no encontrado" });
+
+    const { status, body } = await guardarResenaPedido({
+      tipo: "vintage",
+      pedido,
+      slug: "pastel-vintage",
+      nombreProducto: "Pastel Vintage",
+      rating: req.body?.rating,
+      texto: req.body?.texto,
+    });
+    res.status(status).json(body);
+  } catch (e) {
+    console.error("Error guardando reseña de vintage:", e);
+    res.status(400).json({ message: e.message });
   }
 });
 
@@ -190,6 +221,12 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
       } catch (e) {
         console.error(`[vintage PUT] error enviando confirmación ${doc.numeroOrden}:`, e.message);
       }
+    }
+
+    // Al entregar, invitamos a reseñar (una sola vez y solo con
+    // consentimiento). No bloquea la respuesta.
+    if (doc.status === "Entregado") {
+      enviarInvitacionResena(doc, "vintage").catch(() => {});
     }
 
     res.json({ message: "Pedido actualizado", data: doc });

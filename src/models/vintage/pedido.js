@@ -53,6 +53,10 @@ const pedidoVintageSchema = new mongoose.Schema(
     publicToken: { type: String, default: null, index: true },
     reminderSentAt:  { type: Date },
     confirmacionEnviadaAt: { type: Date }, // guard: evita reenviar el correo de confirmación
+    // Consentimiento para contactarle con novedades (incluida la invitación
+    // a reseñar). Los correos operativos del pedido no dependen de esto.
+    aceptaContacto: { type: Boolean, default: false },
+    invitacionResenaAt: { type: Date, default: null },
     notasInternas: { type: [notaInternaSchema], default: [] },
   },
   { timestamps: true }

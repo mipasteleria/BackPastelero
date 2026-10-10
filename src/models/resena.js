@@ -37,7 +37,7 @@ const resenaSchema = new mongoose.Schema(
         // "cotizacion" es el pastel/cupcakes/mesa que se hizo a medida: no
         // es un producto de catálogo, así que productoId apunta a la
         // cotización y no aparece en los ratings por producto.
-        enum: ["postre", "galleta", "cotizacion"],
+        enum: ["postre", "galleta", "cotizacion", "vintage"],
       },
       productoId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -52,7 +52,7 @@ const resenaSchema = new mongoose.Schema(
     // tipo: "galleta" → pedidoId apunta a galletaPedido
     pedido: {
       pedidoId: { type: mongoose.Schema.Types.ObjectId, required: true },
-      tipo:     { type: String, required: true, enum: ["postre", "galleta", "cotizacion"] },
+      tipo:     { type: String, required: true, enum: ["postre", "galleta", "cotizacion", "vintage"] },
       numeroOrden: { type: String, default: "" },
     },
 
@@ -81,6 +81,11 @@ const resenaSchema = new mongoose.Schema(
 // 1 reseña por usuario+producto. El controller hace UPSERT.
 // Usamos userId si está; si no, fallback a email (compras sin login).
 resenaSchema.index({ "usuario.userId": 1, "producto.productoId": 1 }, { unique: true, sparse: true });
+
+// Una reseña por pedido, pase lo que pase. El índice de arriba es sparse
+// sobre userId, así que no cubre a quien reseña desde su enlace público
+// sin cuenta — este sí.
+resenaSchema.index({ "pedido.pedidoId": 1, "pedido.tipo": 1 }, { unique: true });
 resenaSchema.index({ "usuario.email": 1, "producto.productoId": 1 });
 
 // Listado público por producto (más usado).
