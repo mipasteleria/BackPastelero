@@ -11,6 +11,7 @@ const SaborCotiza = require("../../models/cotizacionCatalogos/sabor");
 const RellenoCotiza = require("../../models/cotizacionCatalogos/relleno");
 const CoberturaCotiza = require("../../models/cotizacionCatalogos/cobertura");
 const Insumo = require("../../models/insumos");
+const { aplicarComisionAlPrecio } = require("../../utils/comisionPasarela");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100));
@@ -100,9 +101,24 @@ async function cotizarVintage(body) {
     for (const d of decos) add(`Decoración: ${d.nombre}`, d.costo, d.margen);
   }
 
-  const total = round2(items.reduce((a, x) => a + x.precio, 0));
+  const totalNeto = round2(items.reduce((a, x) => a + x.precio, 0));
   const totalCosto = round2(items.reduce((a, x) => a + (x.costo || 0), 0));
-  return { items, total, totalCosto, porciones };
+  // Comisión de pasarela encima del neto (gross-up) si está configurada
+  // para incluirse en el precio.
+  //
+  // NO se agrega como renglón de `items`: el builder público muestra esa
+  // lista al cliente y el precio debe verse como uno solo, sin desglosar
+  // conceptos que solo confunden. La comisión viaja aparte, para el admin.
+  const comision = await aplicarComisionAlPrecio(totalNeto);
+  return {
+    items,
+    total: comision.precioFinal,
+    totalNeto,
+    totalCosto,
+    comisionPasarela: comision.comision,
+    comisionAplicada: comision.aplicada,
+    porciones,
+  };
 }
 
 // Público: NUNCA expone costos, solo precios.

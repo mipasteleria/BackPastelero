@@ -4,6 +4,8 @@ const GalletaSabor = require("../models/galletaSabor");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const Notificacion = require("../models/notificaciones");
+const { calcularEmpaque } = require("../utils/empaque");
+const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 /**
@@ -33,11 +35,11 @@ async function getGalletaCostConfig() {
  * Costo "live" por galleta a partir de la receta + config global.
  * Devuelve null si no se puede calcular (sin receta o sin porciones).
  */
-function calcularCostoLive(receta, costoBranding) {
+function calcularCostoLive(receta, costoBranding, costoEmpaque = 0) {
   if (!receta || !receta.portions || receta.portions <= 0) return null;
   if (typeof receta.total_cost !== "number") return null;
   const costoMP = receta.total_cost / receta.portions;
-  return Math.round((costoMP + costoBranding) * 100) / 100;
+  return Math.round((costoMP + costoBranding + (Number(costoEmpaque) || 0)) * 100) / 100;
 }
 
 /**
@@ -84,7 +86,10 @@ router.get("/", async (req, res) => {
       const obj = s.toObject({ virtuals: true });
       if (!s.recetaId) return obj;
       const receta = recetaMap.get(String(s.recetaId));
-      const costoLive = calcularCostoLive(receta, costoBranding);
+      // El empaque cuenta como costo, así que entra en la vigilancia de
+      // margen: si no, un sabor con caja cara se vería sano y no lo es.
+      const { total: costoEmpaque } = await calcularEmpaque(s.empaque);
+      const costoLive = calcularCostoLive(receta, costoBranding, costoEmpaque);
       if (costoLive == null) return obj;
       const margenActual = Math.round((s.precio - costoLive) * 100) / 100;
       const alerta = margenActual < margenMinimo;
@@ -111,7 +116,7 @@ router.get("/", async (req, res) => {
 // Body: { recetaId, markupPct? }
 router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
   try {
-    const { recetaId, markupPct } = req.body || {};
+    const { recetaId, markupPct, empaque } = req.body || {};
     if (!recetaId) return res.status(400).json({ message: "recetaId es requerido" });
 
     const receta = await Receta.findById(recetaId);
@@ -124,8 +129,13 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
     const markup = typeof markupPct === "number" && markupPct >= 0 ? markupPct : markupDefault;
 
     const costoMateriaPrima = Math.round((receta.total_cost / receta.portions) * 100) / 100;
-    const costoTotal = Math.round((costoMateriaPrima + costoBranding) * 100) / 100;
-    const precioSugerido = Math.round(costoTotal * (1 + markup / 100) * 100) / 100;
+    // Empaque por sabor (bolsa, etiqueta, caja…), ligado a materia prima.
+    const { total: costoEmpaque, detalle: empaqueDetalle } = await calcularEmpaque(empaque);
+    const costoTotal = Math.round((costoMateriaPrima + costoBranding + costoEmpaque) * 100) / 100;
+    // El markup define el neto deseado; la comisión de pasarela se suma
+    // encima con gross-up si está configurada para incluirse en el precio.
+    const precioNeto = Math.round(costoTotal * (1 + markup / 100) * 100) / 100;
+    const comision = await aplicarComisionAlPrecio(precioNeto);
 
     res.json({
       message: "Precio calculado",
@@ -133,9 +143,15 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
         receta: { _id: receta._id, nombre_receta: receta.nombre_receta, portions: receta.portions, total_cost: receta.total_cost },
         costoMateriaPrima,
         costoBranding,
+        costoEmpaque,
+        empaqueDetalle,
         costoTotal,
         markupPct: markup,
-        precioSugerido,
+        precioAntesDeComision: precioNeto,
+        comisionPasarela: comision.comision,
+        comisionAplicada: comision.aplicada,
+        comisionDetalle: comision.detalle,
+        precioSugerido: comision.precioFinal,
       },
     });
   } catch (error) {
@@ -166,7 +182,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
       slug, nombre, descripcion, precio, stock,
       imagen, emoji, bg, tag, tagColor, tagText,
       esTemporada, activo, orden,
-      recetaId,
+      recetaId, empaque,
     } = req.body;
 
     if (!slug || !nombre || precio == null) {
@@ -179,7 +195,8 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
       const receta = await Receta.findById(recetaId);
       if (!receta) return res.status(404).json({ message: "Receta no encontrada" });
       const { costoBranding } = await getGalletaCostConfig();
-      const live = calcularCostoLive(receta, costoBranding);
+      const { total: costoEmpaque } = await calcularEmpaque(empaque);
+      const live = calcularCostoLive(receta, costoBranding, costoEmpaque);
       if (live != null) {
         costoUnitarioSnapshot = live;
         fechaCosteoSnapshot = new Date();
@@ -202,6 +219,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
       activo:      activo !== false,
       orden:       Number(orden) || 0,
       recetaId:    recetaId || null,
+      empaque:     Array.isArray(empaque) ? empaque : [],
       costoUnitarioSnapshot,
       fechaCosteoSnapshot,
     });
@@ -232,7 +250,8 @@ router.post("/:id/recostear", checkRoleToken("admin"), async (req, res) => {
     if (!receta) return res.status(404).json({ message: "Receta asociada no encontrada" });
 
     const { costoBranding } = await getGalletaCostConfig();
-    const live = calcularCostoLive(receta, costoBranding);
+    const { total: costoEmpaque } = await calcularEmpaque(sabor.empaque);
+    const live = calcularCostoLive(receta, costoBranding, costoEmpaque);
     if (live == null) {
       return res.status(400).json({ message: "No se pudo calcular el costo (receta sin porciones o total_cost)" });
     }

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const empaqueItemSchema = require("./empaqueItemSchema");
 
 /**
  * Postre del catálogo "Top postres".
@@ -78,11 +79,18 @@ const postreSchema = new mongoose.Schema(
     },
     // Empaque varía por postre (domo, caja, base de cartón, etc.).
     // Se suma al costo unitario antes de aplicar el markup.
+    //
+    // `costoEmpaque` es el campo histórico (un solo número) y se conserva
+    // por retrocompatibilidad con los postres ya dados de alta. Lo nuevo
+    // es `empaque`: renglones ligados a materia prima. Si `empaque` tiene
+    // renglones, manda sobre `costoEmpaque`; si está vacío, se sigue
+    // usando el número manual.
     costoEmpaque: {
       type: Number,
       default: 0,
       min: [0, "El costo de empaque no puede ser negativo"],
     },
+    empaque: { type: [empaqueItemSchema], default: [] },
 
     // Imagen del producto. fileName se guarda para poder borrar el blob
     // de GCS cuando se reemplaza o se elimina el postre (evita huérfanos).

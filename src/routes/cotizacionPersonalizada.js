@@ -9,6 +9,7 @@ const DecoracionCotiza = require("../models/cotizacionCatalogos/decoracion");
 const PostreCotiza = require("../models/cotizacionCatalogos/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
+const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { syncPersonalizadaCalendar } = require("../utils/pedidoCalendarSync");
@@ -603,7 +604,9 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       precioPostres = round2(precioPostres);
       const costoTotalMesa = round2(costoPostres + costoExtras);
       const precioExtrasMesa = precioConMargen(costoExtras, markup);
-      const precioSugeridoMesa = round2(precioPostres + precioExtrasMesa);
+      const precioNetoMesa = round2(precioPostres + precioExtrasMesa);
+      const comisionMesa = await aplicarComisionAlPrecio(precioNetoMesa);
+      const precioSugeridoMesa = comisionMesa.precioFinal;
 
       const snapshotMesa = {
         fechaCosteo: new Date(),
@@ -617,8 +620,12 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         costoExtras, precioExtras: precioExtrasMesa,
         costoTotal: costoTotalMesa,
         markupPct: markup,
+        precioAntesDeComision: precioNetoMesa,
+        comisionPasarela: comisionMesa.comision,
+        comisionAplicada: comisionMesa.aplicada,
+        comisionDetalle: comisionMesa.detalle,
         precioSugerido: precioSugeridoMesa,
-        gananciaNeta: round2(precioSugeridoMesa - costoTotalMesa),
+        gananciaNeta: round2(precioNetoMesa - costoTotalMesa),
       };
 
       cot.costeoSnapshot = snapshotMesa;
@@ -810,8 +817,15 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     // ── Totales ──────────────────────────────────────────────────
     const costoBase      = round2(costoBizcocho + costoRelleno + costoCobertura + costoDecoraciones);
     const costoTotal     = round2(costoBase + costoExtras);
-    const precioSugerido = round2(precioBizcocho + precioRelleno + precioCobertura + precioDecoraciones + precioExtras);
-    const gananciaNeta   = round2(precioSugerido - costoTotal);
+    // Precio con margen = el neto que quiero que me quede.
+    const precioNeto     = round2(precioBizcocho + precioRelleno + precioCobertura + precioDecoraciones + precioExtras);
+    // Comisión de pasarela encima (gross-up), si está configurada para
+    // incluirse en el precio. La ganancia neta se mide contra el neto, no
+    // contra el precio final: la comisión no es ganancia, es un costo que
+    // se le pasa al cliente.
+    const comision       = await aplicarComisionAlPrecio(precioNeto);
+    const precioSugerido = comision.precioFinal;
+    const gananciaNeta   = round2(precioNeto - costoTotal);
 
     const snapshot = {
       fechaCosteo: new Date(),
@@ -832,6 +846,10 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       costoBase,
       costoTotal,
       markupPct: markup,
+      precioAntesDeComision: precioNeto,
+      comisionPasarela: comision.comision,
+      comisionAplicada: comision.aplicada,
+      comisionDetalle: comision.detalle,
       precioSugerido,
       gananciaNeta,
     };

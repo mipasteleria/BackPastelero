@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const empaqueItemSchema = require("./empaqueItemSchema");
 
 /**
  * Sabor de Galleta NY.
@@ -74,6 +75,12 @@ const galletaSaborSchema = new mongoose.Schema(
       min: 0,
     },
     fechaCosteoSnapshot: { type: Date, default: null },
+
+    // Empaque por sabor (bolsa, etiqueta, caja…). Renglones ligados a
+    // materia prima para que el costo se lea en vivo; ver
+    // src/models/empaqueItemSchema.js. Se suma al costo de la receta
+    // antes de aplicar el markup.
+    empaque: { type: [empaqueItemSchema], default: [] },
   },
   { timestamps: true }
 );

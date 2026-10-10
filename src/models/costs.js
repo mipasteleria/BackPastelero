@@ -47,6 +47,33 @@ const costSchema = new mongoose.Schema({
     default: 60,
     min: 0,
   },
+
+  // ── Pasarela de pago: comisión incorporada al precio ───────────
+  // Cuando `incluirEnPrecio` está prendido, los precios sugeridos de
+  // todos los productos se calculan con "gross-up" para que la comisión
+  // de la pasarela no se coma el margen. Ver src/utils/comisionPasarela.js
+  // — sumar el porcentaje a secas NO recupera la comisión.
+  //
+  // Es configurable (y no hardcodeado a Stripe) porque las tarifas
+  // cambian y porque la idea es poder migrar a Mercado Pago sin tocar
+  // código: basta cambiar proveedor y tarifas aquí.
+  pasarela: {
+    proveedor: {
+      type: String,
+      enum: ["stripe", "mercadopago", "otro"],
+      default: "stripe",
+    },
+    // Porcentaje por transacción. Stripe MX ~3.6%, Mercado Pago varía
+    // según el plazo de liberación del dinero.
+    comisionPct: { type: Number, default: 0, min: 0 },
+    // Cuota fija por transacción (Stripe MX cobra $3 MXN además del %).
+    comisionFija: { type: Number, default: 0, min: 0 },
+    // En México la comisión causa IVA, así que la tarifa real es la
+    // publicada × 1.16. Configurable por si cambia o no aplica.
+    ivaSobreComisionPct: { type: Number, default: 16, min: 0 },
+    // El interruptor que pidió el usuario: apagado, nada cambia.
+    incluirEnPrecio: { type: Boolean, default: false },
+  },
 });
 
 module.exports = mongoose.model("Cost", costSchema);

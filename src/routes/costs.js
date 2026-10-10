@@ -90,6 +90,7 @@ router.put('/', checkRoleToken('admin'), async (req, res) => {
       fixedCosts, laborCosts,
       costoBrandingPorGalleta, markupGalletasPct, margenMinimoGalleta,
       costoBrandingPorPostre, markupPostresPct,
+      pasarela,
     } = req.body;
     if (fixedCosts === undefined || laborCosts === undefined) {
       return res.status(400).json({ message: "Parámetros 'fixedCosts' y 'laborCosts' son requeridos" });
@@ -100,6 +101,13 @@ router.put('/', checkRoleToken('admin'), async (req, res) => {
     if (margenMinimoGalleta     !== undefined) update.margenMinimoGalleta     = margenMinimoGalleta;
     if (costoBrandingPorPostre  !== undefined) update.costoBrandingPorPostre  = costoBrandingPorPostre;
     if (markupPostresPct        !== undefined) update.markupPostresPct        = markupPostresPct;
+    // Pasarela: campo por campo con notación de punto, para que mandar
+    // solo `incluirEnPrecio` no borre las tarifas ya capturadas.
+    if (pasarela && typeof pasarela === "object") {
+      for (const k of ["proveedor", "comisionPct", "comisionFija", "ivaSobreComisionPct", "incluirEnPrecio"]) {
+        if (pasarela[k] !== undefined) update[`pasarela.${k}`] = pasarela[k];
+      }
+    }
     const cost = await Cost.findOneAndUpdate(
       {},
       update,

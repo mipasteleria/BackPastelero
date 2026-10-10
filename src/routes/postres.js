@@ -4,6 +4,8 @@ const { Storage } = require("@google-cloud/storage");
 const Postre = require("../models/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
+const { calcularEmpaque } = require("../utils/empaque");
+const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 const MAX_DESTACADOS = 4;
@@ -15,7 +17,7 @@ function round2(n) { return Math.round(n * 100) / 100; }
  * receta + empaque del postre + config global. Reusa el patrón de
  * galletaSabores.calcular-precio pero con empaque por postre.
  */
-async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, cantidadReceta = 1, markupPctOverride } = {}) {
+async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, empaque, cantidadReceta = 1, markupPctOverride } = {}) {
   const receta = await Receta.findById(recetaId);
   if (!receta) throw new Error("Receta no encontrada");
   if (!receta.portions || receta.portions <= 0) {
@@ -42,9 +44,21 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, cantidadRece
   const cantidad = Math.max(0, Number(cantidadReceta) || 1);
   const costoUnitarioReceta = receta.total_cost / receta.portions;
   const costoMateriaPrima = round2(costoUnitarioReceta * cantidad);
-  const empaque = Number(costoEmpaque) || 0;
-  const costoTotal = round2(costoMateriaPrima + costoBranding + empaque);
-  const precioSugerido = round2(costoTotal * (1 + markup / 100));
+
+  // Empaque: si vienen renglones ligados a materia prima, mandan sobre el
+  // número manual histórico. Así los postres viejos siguen costeando igual.
+  const tieneRenglones = Array.isArray(empaque) && empaque.length > 0;
+  const { total: empaqueRenglones, detalle: empaqueDetalle } = tieneRenglones
+    ? await calcularEmpaque(empaque)
+    : { total: 0, detalle: [] };
+  const costoEmpaqueFinal = tieneRenglones ? empaqueRenglones : (Number(costoEmpaque) || 0);
+
+  const costoTotal = round2(costoMateriaPrima + costoBranding + costoEmpaqueFinal);
+  // Precio con markup = lo que quiero que me quede (neto).
+  const precioNeto = round2(costoTotal * (1 + markup / 100));
+  // Y si la comisión de pasarela está configurada para incluirse, se le
+  // aplica el gross-up para que la comisión no se coma el markup.
+  const comision = await aplicarComisionAlPrecio(precioNeto);
 
   return {
     receta: {
@@ -58,10 +72,16 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, cantidadRece
     costoUnitarioReceta: round2(costoUnitarioReceta),
     costoMateriaPrima,
     costoBranding,
-    costoEmpaque: empaque,
+    costoEmpaque: costoEmpaqueFinal,
+    empaqueDetalle,
+    empaqueFuente: tieneRenglones ? "renglones" : "manual",
     costoTotal,
     markupPct: markup,
-    precioSugerido,
+    precioAntesDeComision: precioNeto,
+    comisionPasarela: comision.comision,
+    comisionAplicada: comision.aplicada,
+    comisionDetalle: comision.detalle,
+    precioSugerido: comision.precioFinal,
   };
 }
 
@@ -100,6 +120,7 @@ const CAMPOS_EDITABLES = [
   "recetaId",
   "cantidadReceta",
   "costoEmpaque",
+  "empaque",
   "categoria",
   "unidad",
   "minimo",
@@ -177,12 +198,13 @@ router.get("/destacados", async (req, res) => {
  */
 router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
   try {
-    const { recetaId, costoEmpaque, cantidadReceta, markupPct } = req.body || {};
+    const { recetaId, costoEmpaque, empaque, cantidadReceta, markupPct } = req.body || {};
     if (!recetaId) return res.status(400).json({ message: "recetaId es requerido" });
 
     const data = await calcularDesglosePostre({
       recetaId,
       costoEmpaque,
+      empaque,
       cantidadReceta,
       markupPctOverride: typeof markupPct === "number" ? markupPct : undefined,
     });
