@@ -259,6 +259,35 @@ const upload = multer({
   },
 });
 
+// Quien cotiza sin cuenta puede adjuntar UNA imagen de referencia. El
+// límite más bajo acota el abuso de un endpoint que ya no pide sesión.
+const uploadInvitado = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5 MB
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_MIME.has(file.mimetype)) return cb(null, true);
+    cb(new Error("Tipo de archivo no permitido. Solo JPG, PNG, WEBP o GIF."));
+  },
+});
+
+/**
+ * Identifica al usuario si manda token, pero deja pasar a los invitados.
+ * Lo usa /upload: la cotización se puede llenar sin cuenta, y el carril de
+ * invitado es más restrictivo (ver uploadInvitado).
+ */
+function authOpcional(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (token) {
+    try {
+      req.user = require("jsonwebtoken").verify(token, process.env.JWT_SIGN);
+    } catch (_) { /* token inválido → sigue como invitado */ }
+  }
+  next();
+}
+
 // Construye un nombre de archivo seguro para GCS: sólo basename (sin `../`),
 // prefijo random para evitar que un segundo upload sobrescriba al primero,
 // y extensión validada contra el mimetype.
@@ -317,12 +346,14 @@ async function uploadFileToGCS(file, bucketName, req) {
   });
 }
 
-// Subir imagen. Requiere estar autenticado (cualquier rol).
+// Subir imagen. Abierto a invitados (la cotización no exige cuenta), pero
+// con rate-limit y, sin sesión, una sola imagen de hasta 5 MB.
 // El fileFilter de multer rechaza tipos no permitidos; aquí capturamos el error
 // y devolvemos 400 en lugar de 500 genérico.
-app.post("/upload", requireAuth, (req, res, next) => {
+app.post("/upload", sensitiveLimiter, authOpcional, (req, res, next) => {
   if (!storage) return res.status(503).json({ error: "File upload not configured" });
-  upload.array("files")(req, res, (err) => {
+  const parser = req.user ? upload.array("files") : uploadInvitado.array("files");
+  parser(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: err.message });
     }
