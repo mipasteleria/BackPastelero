@@ -126,7 +126,25 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
     }
 
     const { costoBranding, markupPct: markupDefault } = await getGalletaCostConfig();
-    const markup = typeof markupPct === "number" && markupPct >= 0 ? markupPct : markupDefault;
+    // Prioridad del margen, igual que en postres y en cotizaciones
+    // personalizadas: lo que el admin escriba en el form > el margen
+    // propio de la receta > el default global.
+    //
+    // Antes se ignoraba `receta.profit_margin` y siempre se usaba el
+    // global, así que el margen capturado en la receta no servía de nada
+    // al costear galletas.
+    let markup;
+    let markupFuente;
+    if (typeof markupPct === "number" && markupPct >= 0) {
+      markup = markupPct;
+      markupFuente = "manual";
+    } else if (typeof receta.profit_margin === "number" && receta.profit_margin >= 0) {
+      markup = receta.profit_margin;
+      markupFuente = "receta";
+    } else {
+      markup = markupDefault;
+      markupFuente = "global";
+    }
 
     const costoMateriaPrima = Math.round((receta.total_cost / receta.portions) * 100) / 100;
     // Empaque por sabor (bolsa, etiqueta, caja…), ligado a materia prima.
@@ -147,6 +165,8 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
         empaqueDetalle,
         costoTotal,
         markupPct: markup,
+        markupFuente,
+        markupReceta: typeof receta.profit_margin === "number" ? receta.profit_margin : null,
         precioAntesDeComision: precioNeto,
         comisionPasarela: comision.comision,
         comisionAplicada: comision.aplicada,
