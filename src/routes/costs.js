@@ -92,10 +92,20 @@ router.put('/', checkRoleToken('admin'), async (req, res) => {
       costoBrandingPorPostre, markupPostresPct,
       pasarela,
     } = req.body;
-    if (fixedCosts === undefined || laborCosts === undefined) {
-      return res.status(400).json({ message: "Parámetros 'fixedCosts' y 'laborCosts' son requeridos" });
-    }
-    const update = { fixedCosts, laborCosts };
+
+    // `fixedCosts` y `laborCosts` son OPCIONALES a propósito.
+    //
+    // Antes eran obligatorios, así que las secciones del form que no los
+    // editan (galletas, postres, pasarela) los reenviaban tomándolos del
+    // estado de la página — y si ese estado aún traía los ceros iniciales,
+    // guardar cualquiera de esas secciones borraba las tarifas por hora.
+    // Pasó en producción: quedaron en 0 y con eso toda receta que se
+    // reguardara habría salido sin mano de obra ni gastos fijos.
+    //
+    // Ahora cada sección manda solo lo suyo y lo que no viene no se toca.
+    const update = {};
+    if (fixedCosts  !== undefined) update.fixedCosts  = fixedCosts;
+    if (laborCosts  !== undefined) update.laborCosts  = laborCosts;
     if (costoBrandingPorGalleta !== undefined) update.costoBrandingPorGalleta = costoBrandingPorGalleta;
     if (markupGalletasPct       !== undefined) update.markupGalletasPct       = markupGalletasPct;
     if (margenMinimoGalleta     !== undefined) update.margenMinimoGalleta     = margenMinimoGalleta;
