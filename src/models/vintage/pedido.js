@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const notaInternaSchema = require("../notaInternaSchema");
+const { emailCliente } = require("../emailField");
 
 /**
  * Pedido de Pastel Vintage. Producto configurable con total cerrado.
@@ -41,7 +42,7 @@ const pedidoVintageSchema = new mongoose.Schema(
     cliente: {
       nombre:   { type: String, required: true, trim: true },
       telefono: { type: String, required: true, trim: true },
-      email:    { type: String, default: "", trim: true, lowercase: true },
+      email:    emailCliente(),
     },
     fecha:  { type: Date },
     notas:  { type: String, default: "" },

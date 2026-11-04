@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { emailCliente } = require("./emailField");
 const notaInternaSchema = require("./notaInternaSchema");
 
 /**
@@ -136,7 +137,7 @@ const cotizacionPersonalizadaSchema = new mongoose.Schema(
           message: "Teléfono debe tener al menos 10 dígitos",
         },
       },
-      email:   { type: String, default: "", trim: true, lowercase: true },
+      email:   emailCliente(),
     },
 
     // Número de orden legible (PAS-/CUP-/SNA-...). Se genera al crear.
