@@ -1,0 +1,44 @@
+# Dependabot — actualizaciones de dependencias del backend.
+#
+# Dos cosas distintas corren en paralelo:
+#
+#   1. Parches de SEGURIDAD: se activan en la configuración del repo (no
+#      aquí) y abren un PR en cuanto se publica un aviso que te afecta,
+#      sin esperar al calendario de abajo.
+#   2. Actualizaciones de VERSIÓN: las de este archivo, en su día fijo.
+#
+# La idea del agrupado es que no te lleguen quince PRs sueltos: los
+# cambios de parche y menores —los que casi nunca rompen nada— llegan
+# juntos en un solo PR, y los de versión mayor llegan aparte, uno por uno,
+# porque esos sí hay que leerlos con calma (ej. pasar de Express 4 a 5, o
+# de Mongoose 8 a 9, cambian cosas del comportamiento).
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/Mexico_City"
+    # Tope bajo a propósito: más de esto deja de leerse.
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencias"
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Todo lo de bajo riesgo en un solo PR semanal.
+      menores-y-parches:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Las versiones mayores siguen llegando como PR individual (no se
+      # ignoran); lo único que se excluye aquí es nodemon, que es
+      # herramienta local de desarrollo y no corre en producción.
+      - dependency-name: "nodemon"
+        update-types: ["version-update:semver-major"]
