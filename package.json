@@ -14,7 +14,7 @@
   "author": "Alan Alexis Fuentes Carranza",
   "license": "ISC",
   "dependencies": {
-    "@google-cloud/storage": "^7.12.1",
+    "@google-cloud/storage": "^8.4.0",
     "@google-cloud/video-transcoder": "^4.4.3",
     "@stripe/react-stripe-js": "^2.8.0",
     "@stripe/stripe-js": "^4.4.0",
