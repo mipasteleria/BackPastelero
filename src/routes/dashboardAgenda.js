@@ -6,6 +6,8 @@ const GalletaPedido = require("../models/galletaPedido");
 const PostrePedido = require("../models/postrePedido");
 const VintagePedido = require("../models/vintage/pedido");
 const Cotizacion = require("../models/cotizacionPersonalizada");
+const Cost = require("../models/costs");
+const { desglosarCostos } = require("../utils/desgloseCostos");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -110,6 +112,14 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
     const topProductos = Object.entries(conteo).map(([nombre, cantidad]) => ({ nombre, cantidad }))
       .sort((a, b) => b.cantidad - a.cantidad).slice(0, 8);
 
+    // En qué se va el costo: materia prima, mano de obra y taller.
+    // Rastrea cada renglón del costeo hasta su receta o técnica de origen.
+    const cfgTarifas = await Cost.findOne().lean();
+    const desgloseCostos = await desglosarCostos(cotizaciones, vintage, {
+      laborCosts: cfgTarifas?.laborCosts ?? 0,
+      fixedCosts: cfgTarifas?.fixedCosts ?? 0,
+    });
+
     res.json({
       data: {
         mes, eventos,
@@ -120,6 +130,7 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
           costos,                 // costos conocidos (vintage + cotizaciones costeadas)
           gananciaNeta,           // sobre los pedidos con costo registrado
           ingresosConCosto,       // base de la neta (transparencia)
+          desgloseCostos,         // en qué se va el costo + cobertura
           topProductos,
         },
       },
