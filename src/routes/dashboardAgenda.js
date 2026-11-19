@@ -98,7 +98,7 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
     // Stripe o terminal. En efectivo y transferencia no se paga nada, así
     // que descontarla a todo por igual se inventaría un gasto.
     const pasarela = await getConfigPasarela();
-    const pctComision = pasarela.activa
+    const pctComision = pasarela.hayTarifas
       ? (pasarela.comisionPct / 100) * (1 + pasarela.ivaSobreComisionPct / 100)
       : 0;
 

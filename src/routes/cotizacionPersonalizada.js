@@ -9,7 +9,7 @@ const DecoracionCotiza = require("../models/cotizacionCatalogos/decoracion");
 const PostreCotiza = require("../models/cotizacionCatalogos/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
-const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
+const { aplicarComisionAlPrecio, getConfigPasarela, comisionSobrePrecio } = require("../utils/comisionPasarela");
 const { costearPostreMesa } = require("../utils/costeoPostreMesa");
 const { calcularEmpaque } = require("../utils/empaque");
 const checkRoleToken = require("../middlewares/myRoleToken");
@@ -652,6 +652,11 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       const precioNetoMesa = round2(precioPostres + precioExtrasMesa);
       const comisionMesa = await aplicarComisionAlPrecio(precioNetoMesa);
       const precioSugeridoMesa = comisionMesa.precioFinal;
+      // Si el precio no se infla, la comisión sale de la ganancia.
+      const cfgPas = await getConfigPasarela();
+      const comisionDescontadaMesa = cfgPas.incluirEnPrecio
+        ? 0
+        : comisionSobrePrecio(precioSugeridoMesa, cfgPas);
 
       const snapshotMesa = {
         fechaCosteo: new Date(),
@@ -670,7 +675,8 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         comisionAplicada: comisionMesa.aplicada,
         comisionDetalle: comisionMesa.detalle,
         precioSugerido: precioSugeridoMesa,
-        gananciaNeta: round2(precioNetoMesa - costoTotalMesa),
+        comisionDescontada: comisionDescontadaMesa,
+        gananciaNeta: round2(precioNetoMesa - comisionDescontadaMesa - costoTotalMesa),
       };
 
       cot.costeoSnapshot = snapshotMesa;
@@ -870,7 +876,11 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     // se le pasa al cliente.
     const comision       = await aplicarComisionAlPrecio(precioNeto);
     const precioSugerido = comision.precioFinal;
-    const gananciaNeta   = round2(precioNeto - costoTotal);
+    const cfgPas2 = await getConfigPasarela();
+    const comisionDescontada = cfgPas2.incluirEnPrecio
+      ? 0
+      : comisionSobrePrecio(precioSugerido, cfgPas2);
+    const gananciaNeta   = round2(precioNeto - comisionDescontada - costoTotal);
 
     const snapshot = {
       fechaCosteo: new Date(),
@@ -896,6 +906,7 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       comisionAplicada: comision.aplicada,
       comisionDetalle: comision.detalle,
       precioSugerido,
+      comisionDescontada,
       gananciaNeta,
     };
 

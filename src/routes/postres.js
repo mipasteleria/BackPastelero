@@ -5,7 +5,7 @@ const Postre = require("../models/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const { calcularEmpaque } = require("../utils/empaque");
-const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
+const { aplicarComisionAlPrecio, getConfigPasarela, comisionSobrePrecio } = require("../utils/comisionPasarela");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 const MAX_DESTACADOS = 4;
@@ -59,6 +59,12 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, empaque, can
   // Y si la comisión de pasarela está configurada para incluirse, se le
   // aplica el gross-up para que la comisión no se coma el markup.
   const comision = await aplicarComisionAlPrecio(precioNeto);
+  // Si el precio NO se infla, la comisión sale de la ganancia: se reporta
+  // para que la pantalla pueda restarla en vez de ignorarla.
+  const cfgPasarela = await getConfigPasarela();
+  const comisionDescontada = cfgPasarela.incluirEnPrecio
+    ? 0
+    : comisionSobrePrecio(comision.precioFinal, cfgPasarela);
 
   return {
     receta: {
@@ -82,6 +88,10 @@ async function calcularDesglosePostre({ recetaId, costoEmpaque = 0, empaque, can
     comisionAplicada: comision.aplicada,
     comisionDetalle: comision.detalle,
     precioSugerido: comision.precioFinal,
+    comisionDescontada,
+    gananciaReal: round2(comision.precioFinal - comisionDescontada - costoTotal),
+    comisionProveedor: cfgPasarela.proveedorNombre,
+    comisionPctUnitaria: Math.round(cfgPasarela.comisionPct * (1 + cfgPasarela.ivaSobreComisionPct / 100) * 10) / 10,
   };
 }
 

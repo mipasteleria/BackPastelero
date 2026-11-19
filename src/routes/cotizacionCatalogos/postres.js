@@ -58,7 +58,7 @@ router.get("/costeo", checkRoleToken("admin"), async (req, res) => {
     // porcentual: la cuota fija ($3 en Stripe) es por transacción, no por
     // unidad, así que repartirla entre piezas daría un número inventado.
     const pasarela = await getConfigPasarela();
-    const pctConIva = pasarela.activa
+    const pctConIva = pasarela.hayTarifas
       ? (pasarela.comisionPct / 100) * (1 + pasarela.ivaSobreComisionPct / 100)
       : 0;
     const postres = await PostreCotiza.find().populate("recetaId").sort({ orden: 1 });
@@ -81,7 +81,7 @@ router.get("/costeo", checkRoleToken("admin"), async (req, res) => {
         nombre: p.nombre,
         empaqueDetalle,
         ...costeo,
-        comisionActiva: pasarela.activa,
+        comisionActiva: pasarela.hayTarifas,
         comisionProveedor: pasarela.proveedorNombre,
         comisionPctUnitaria: Math.round(pctConIva * 1000) / 10,
         gananciaEfectivo,

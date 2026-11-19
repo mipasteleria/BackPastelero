@@ -48,9 +48,33 @@ async function getConfigPasarela() {
     comisionPct,
     comisionFija,
     ivaSobreComisionPct: p.ivaSobreComisionPct != null ? Number(p.ivaSobreComisionPct) : 16,
-    // Solo tiene efecto si el admin lo prendió Y hay alguna tarifa capturada.
+    // Dos cosas distintas, que antes estaban mezcladas en un solo flag:
+    //
+    //   hayTarifas      -> hay comisión que pagar. Siempre debe tomarse en
+    //                      cuenta al calcular la ganancia real.
+    //   incluirEnPrecio -> además, el precio sugerido se infla para que el
+    //                      cliente la cubra (gross-up).
+    //
+    // Mezclarlas tenía un efecto perverso: apagar el gross-up hacía que la
+    // comisión desapareciera de TODOS los cálculos, como si no se pagara.
+    hayTarifas: comisionPct > 0 || comisionFija > 0,
+    incluirEnPrecio: Boolean(p.incluirEnPrecio),
+    // `activa` queda como "aplica el gross-up", que es lo que consulta
+    // aplicarComision().
     activa: Boolean(p.incluirEnPrecio) && (comisionPct > 0 || comisionFija > 0),
   };
+}
+
+/**
+ * Lo que se lleva la pasarela de un precio ya fijado (parte porcentual).
+ *
+ * La cuota fija es por transacción, no por producto, así que no entra en
+ * un cálculo por unidad: repartirla daría un número inventado.
+ */
+function comisionSobrePrecio(precio, cfg) {
+  if (!cfg?.hayTarifas) return 0;
+  const pct = ((Number(cfg.comisionPct) || 0) / 100) * (1 + (Number(cfg.ivaSobreComisionPct) || 0) / 100);
+  return Math.round((Number(precio) || 0) * pct * 100) / 100;
 }
 
 /**
@@ -105,4 +129,4 @@ async function aplicarComisionAlPrecio(precioNeto) {
   return aplicarComision(precioNeto, cfg);
 }
 
-module.exports = { PROVEEDORES, getConfigPasarela, aplicarComision, aplicarComisionAlPrecio };
+module.exports = { PROVEEDORES, getConfigPasarela, aplicarComision, aplicarComisionAlPrecio, comisionSobrePrecio };

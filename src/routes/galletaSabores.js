@@ -5,7 +5,7 @@ const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const Notificacion = require("../models/notificaciones");
 const { calcularEmpaque } = require("../utils/empaque");
-const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
+const { aplicarComisionAlPrecio, getConfigPasarela, comisionSobrePrecio } = require("../utils/comisionPasarela");
 const checkRoleToken = require("../middlewares/myRoleToken");
 
 /**
@@ -154,6 +154,10 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
     // encima con gross-up si está configurada para incluirse en el precio.
     const precioNeto = Math.round(costoTotal * (1 + markup / 100) * 100) / 100;
     const comision = await aplicarComisionAlPrecio(precioNeto);
+    const cfgPasarela = await getConfigPasarela();
+    const comisionDescontada = cfgPasarela.incluirEnPrecio
+      ? 0
+      : comisionSobrePrecio(comision.precioFinal, cfgPasarela);
 
     res.json({
       message: "Precio calculado",
@@ -172,6 +176,10 @@ router.post("/calcular-precio", checkRoleToken("admin"), async (req, res) => {
         comisionAplicada: comision.aplicada,
         comisionDetalle: comision.detalle,
         precioSugerido: comision.precioFinal,
+        comisionDescontada,
+        gananciaReal: Math.round((comision.precioFinal - comisionDescontada - costoTotal) * 100) / 100,
+        comisionProveedor: cfgPasarela.proveedorNombre,
+        comisionPctUnitaria: Math.round(cfgPasarela.comisionPct * (1 + cfgPasarela.ivaSobreComisionPct / 100) * 10) / 10,
       },
     });
   } catch (error) {
