@@ -28,6 +28,13 @@ const postreSchema = new mongoose.Schema(
     descripcion: { type: String, trim: true, default: "" },
     emoji:       { type: String, default: "🍰" },
 
+    // Foto del postre. El emoji sigue siendo el respaldo cuando no hay
+    // imagen, igual que en el catálogo público de postres.
+    // `imagenFileName` se guarda para poder borrar el archivo de GCS al
+    // reemplazarlo o eliminar el postre, y no dejar huérfanos.
+    imagenUrl:      { type: String, default: "" },
+    imagenFileName: { type: String, default: "" },
+
     // ── Costeo ──────────────────────────────────────────────
     // Preferido: vincular a una Receta y recostear.
     recetaId: {

@@ -10,6 +10,7 @@ const PostreCotiza = require("../models/cotizacionCatalogos/postre");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
+const { costearPostreMesa } = require("../utils/costeoPostreMesa");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { syncPersonalizadaCalendar } = require("../utils/pedidoCalendarSync");
@@ -581,14 +582,10 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
       const postresDetalle = [];
       let costoPostres = 0, precioPostres = 0;
       for (const p of docs) {
-        let unitario = 0, margenPct = markup, fuente = "manual";
-        if (p.recetaId && p.recetaId.portions > 0) {
-          unitario = p.recetaId.total_cost / p.recetaId.portions;
-          margenPct = p.recetaId.profit_margin ?? markup;
-          fuente = "receta";
-        } else {
-          unitario = p.costoUnitarioSnapshot ?? p.costoManual ?? 0;
-        }
+        // Mismo helper que usa la pantalla de catálogo, para que lo que
+        // ve el admin al dar de alta el postre sea exactamente lo que se
+        // cobra aquí. Ver src/utils/costeoPostreMesa.js.
+        const { costoUnitarioExacto: unitario, margenPct, fuente } = costearPostreMesa(p, markup);
         const costo = round2(unitario * piezasPorTipo);
         const precio = precioConMargen(costo, margenPct);
         costoPostres += costo; precioPostres += precio;
