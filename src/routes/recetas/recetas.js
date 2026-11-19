@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Receta = require("../../models/recetas/recetas");
+const { calcularCostoReceta } = require("../../utils/costoReceta");
 const checkRoleToken = require("../../middlewares/myRoleToken");
 
 /**
@@ -85,8 +86,16 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
       }
     }
 
-    const newReceta = await Receta.create(receta);
-    res.status(201).send({ message: "Receta creada", data: newReceta });
+    // El costo lo calcula el servidor, NO el navegador. Ver
+    // src/utils/costoReceta.js: confiar en el número del cliente dejó 27
+    // recetas guardadas sin mano de obra ni gastos fijos.
+    const { total_cost, advertencias } = await calcularCostoReceta(receta);
+    if (advertencias.length) {
+      console.warn(`[recetas] ${receta.nombre_receta}: ${advertencias.join(" | ")}`);
+    }
+
+    const newReceta = await Receta.create({ ...receta, total_cost });
+    res.status(201).send({ message: "Receta creada", data: newReceta, advertencias });
   } catch (error) {
     console.error("Error al guardar la receta:", error);
     res.status(400).send({ message: error.message });
@@ -162,13 +171,20 @@ router.put("/:id", checkRoleToken("admin"), async (req, res) => {
       }
     }
 
-    const updatedReceta = await Receta.findByIdAndUpdate(id, receta, {
+    // Igual que en el alta: el costo se recalcula aquí y se ignora el
+    // que mande el cliente.
+    const { total_cost, advertencias } = await calcularCostoReceta(receta);
+    if (advertencias.length) {
+      console.warn(`[recetas] ${receta.nombre_receta || id}: ${advertencias.join(" | ")}`);
+    }
+
+    const updatedReceta = await Receta.findByIdAndUpdate(id, { ...receta, total_cost }, {
       new: true,
     });
     if (!updatedReceta) {
       return res.status(404).send({ message: "Receta no encontrada" });
     }
-    res.status(200).send({ message: "Receta actualizada", data: updatedReceta });
+    res.status(200).send({ message: "Receta actualizada", data: updatedReceta, advertencias });
   } catch (error) {
     console.error("Error al actualizar la receta:", error);
     res.status(400).send({ message: error.message });
