@@ -29,6 +29,7 @@ const crudRouter = crudFactory({
     "imagenFileName",
     "recetaId",
     "costoManual",
+    "precioManual",
     "activo",
     "orden",
   ],

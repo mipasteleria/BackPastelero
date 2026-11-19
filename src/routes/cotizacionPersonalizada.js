@@ -622,10 +622,16 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         // Mismo helper que usa la pantalla de catálogo, para que lo que
         // ve el admin al dar de alta el postre sea exactamente lo que se
         // cobra aquí. Ver src/utils/costeoPostreMesa.js.
-        const { costoUnitarioExacto: unitario, margenPct, fuente } = costearPostreMesa(p, markup);
+        const { costoUnitarioExacto: unitario, margenPct, fuente, precioFuente, precioUnitario } =
+          costearPostreMesa(p, markup);
         const piezasDeEste = piezasDe(p);
         const costo = round2(unitario * piezasDeEste);
-        const precio = precioConMargen(costo, margenPct);
+        // Con precio fijado a mano se multiplica el precio por pieza, no
+        // se reaplica el margen: ese margen es un porcentaje redondeado y
+        // reconstruirlo desviaría unos pesos del precio que se pactó.
+        const precio = precioFuente === "manual"
+          ? round2(precioUnitario * piezasDeEste)
+          : precioConMargen(costo, margenPct);
         costoPostres += costo; precioPostres += precio;
         postresDetalle.push({
           slug: p.slug, nombre: p.nombre,

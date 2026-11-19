@@ -36,7 +36,22 @@ function costearPostreMesa(postre, markupGlobal) {
   }
 
   const costoUnitario = round2(unitario);
-  const precioUnitario = round2(unitario * (1 + (Number(margenPct) || 0) / 100));
+
+  // Precio: el fijado a mano si existe, si no el costo con su margen.
+  // Cuando se fija a mano, el margen deja de ser un dato de entrada y
+  // pasa a ser el resultado: lo interesante es cuánto deja de verdad.
+  const precioFijado = Number(postre?.precioManual);
+  const hayPrecioManual = Number.isFinite(precioFijado) && precioFijado > 0;
+
+  const precioUnitario = hayPrecioManual
+    ? round2(precioFijado)
+    : round2(unitario * (1 + (Number(margenPct) || 0) / 100));
+
+  if (hayPrecioManual) {
+    margenPct = costoUnitario > 0
+      ? Math.round(((precioUnitario - costoUnitario) / costoUnitario) * 100)
+      : 0;
+  }
 
   return {
     // Sin redondear: el costeo de la cotización multiplica esto por el
@@ -49,8 +64,11 @@ function costearPostreMesa(postre, markupGlobal) {
     precioUnitario,
     gananciaUnitaria: round2(precioUnitario - costoUnitario),
     fuente,
-    // De dónde salió el margen, para poder explicarlo en pantalla.
-    margenFuente: tieneReceta && receta.profit_margin != null ? "receta" : "global",
+    // De dónde salió el precio y el margen, para explicarlo en pantalla.
+    precioFuente: hayPrecioManual ? "manual" : "margen",
+    margenFuente: hayPrecioManual
+      ? "calculado"
+      : (tieneReceta && receta.profit_margin != null ? "receta" : "global"),
     recetaNombre: receta?.nombre_receta?.trim() || null,
     recetaPorciones: tieneReceta ? receta.portions : null,
   };

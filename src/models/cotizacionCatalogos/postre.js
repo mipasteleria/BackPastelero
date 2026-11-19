@@ -45,8 +45,18 @@ const postreSchema = new mongoose.Schema(
     costoUnitarioSnapshot: { type: Number, default: null, min: 0 },
     fechaCosteoSnapshot:   { type: Date, default: null },
 
-    // Fallback: costo manual por porción (por pieza de postre).
+    // Fallback de COSTO: solo se usa cuando no hay receta vinculada.
     costoManual: { type: Number, default: 0, min: 0 },
+
+    // PRECIO de venta por porción, fijado a mano.
+    //
+    // Es distinto de `costoManual`: el costo sigue saliendo de la receta,
+    // y esto es lo que se le cobra al cliente. Con los dos datos se puede
+    // mostrar la ganancia real en vez de aplicar un margen a ciegas.
+    //
+    // `null` significa "calcula el precio con el margen", que es el
+    // comportamiento de siempre.
+    precioManual: { type: Number, default: null, min: 0 },
 
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
