@@ -140,15 +140,37 @@ async function snapshotSaboresCupcake(filas) {
   return out;
 }
 
-async function snapshotPostres(slugs) {
-  if (!Array.isArray(slugs) || slugs.length === 0) return [];
-  const docs = await PostreCotiza.find({ slug: { $in: slugs }, activo: true });
-  return docs.map((p) => ({
-    catalogoId: p._id,
-    slug: p.slug,
-    nombre: p.nombre,
-    costoSnapshot: p.costoUnitarioSnapshot ?? p.costoManual ?? 0,
-  }));
+/**
+ * Snapshot de los postres elegidos para la mesa.
+ *
+ * Acepta dos formas, para no romper lo que ya mandaba el front:
+ *   - ["tarta-nuez", "rosca-naranja"]                 (sin cantidades)
+ *   - [{ slug: "tarta-nuez", cantidad: 45 }, ...]     (con cantidades)
+ *
+ * Sin cantidad, el costeo reparte el total de piezas en partes iguales,
+ * que es como funcionaba antes. Con cantidad, cada postre lleva la suya.
+ */
+async function snapshotPostres(seleccion) {
+  if (!Array.isArray(seleccion) || seleccion.length === 0) return [];
+
+  const normalizada = seleccion
+    .map((s) => (typeof s === "string" ? { slug: s, cantidad: null } : s))
+    .filter((s) => s && s.slug);
+  if (normalizada.length === 0) return [];
+
+  const porSlug = new Map(normalizada.map((s) => [s.slug, s]));
+  const docs = await PostreCotiza.find({ slug: { $in: [...porSlug.keys()] }, activo: true });
+
+  return docs.map((p) => {
+    const cant = Number(porSlug.get(p.slug)?.cantidad);
+    return {
+      catalogoId: p._id,
+      slug: p.slug,
+      nombre: p.nombre,
+      costoSnapshot: p.costoUnitarioSnapshot ?? p.costoManual ?? 0,
+      cantidad: Number.isFinite(cant) && cant > 0 ? cant : null,
+    };
+  });
 }
 
 // ── POST público — crear nueva cotización ─────────────────────────
@@ -570,13 +592,28 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
     const tarifaHora = cfg?.laborCosts ?? 0;
 
     // ── Mesa de postres ──────────────────────────────────────────
-    // Costo estimado: total de piezas = personas × postres por persona,
-    // repartidas equitativamente entre los postres elegidos.
+    // Cada postre puede llevar su propia cantidad (ej. 45 tartas de nuez
+    // y 50 roscas). Si no se especificaron cantidades —como en las
+    // cotizaciones viejas— se reparte el total de piezas en partes
+    // iguales, que es el comportamiento anterior.
     if (cot.tipoProducto === "mesa-postres") {
-      const piezasTotales = inv * (cot.postresPorPersona || 1);
-      const ids = (cot.postres || []).map((p) => p.catalogoId).filter(Boolean);
+      const seleccion = cot.postres || [];
+      const ids = seleccion.map((p) => p.catalogoId).filter(Boolean);
       const docs = await PostreCotiza.find({ _id: { $in: ids } }).populate("recetaId");
-      const piezasPorTipo = docs.length > 0 ? piezasTotales / docs.length : 0;
+
+      const cantidadPorId = new Map(
+        seleccion
+          .filter((p) => p.catalogoId && Number(p.cantidad) > 0)
+          .map((p) => [String(p.catalogoId), Number(p.cantidad)])
+      );
+      const conCantidades = cantidadPorId.size > 0;
+
+      const piezasTotales = conCantidades
+        ? [...cantidadPorId.values()].reduce((a, n) => a + n, 0)
+        : inv * (cot.postresPorPersona || 1);
+      const piezasRepartidas = docs.length > 0 ? piezasTotales / docs.length : 0;
+      const piezasDe = (doc) =>
+        conCantidades ? (cantidadPorId.get(String(doc._id)) || 0) : piezasRepartidas;
 
       const precioConMargen = (costo, m) => round2(costo * (1 + (Number(m) || 0) / 100));
       const postresDetalle = [];
@@ -586,12 +623,13 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         // ve el admin al dar de alta el postre sea exactamente lo que se
         // cobra aquí. Ver src/utils/costeoPostreMesa.js.
         const { costoUnitarioExacto: unitario, margenPct, fuente } = costearPostreMesa(p, markup);
-        const costo = round2(unitario * piezasPorTipo);
+        const piezasDeEste = piezasDe(p);
+        const costo = round2(unitario * piezasDeEste);
         const precio = precioConMargen(costo, margenPct);
         costoPostres += costo; precioPostres += precio;
         postresDetalle.push({
           slug: p.slug, nombre: p.nombre,
-          costoUnitario: round2(unitario), piezas: Math.round(piezasPorTipo),
+          costoUnitario: round2(unitario), piezas: Math.round(piezasDeEste),
           costo, margenPct, precio, fuente,
           recetaId: p.recetaId?._id || null,
           recetaNombre: p.recetaId?.nombre_receta || null,

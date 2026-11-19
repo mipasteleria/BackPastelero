@@ -32,6 +32,12 @@ const seleccionCatalogoSnap = new mongoose.Schema(
     costoSnapshot: { type: Number, default: null },
     // Para cobertura, congelamos si era fondant.
     esFondant: { type: Boolean, default: false },
+    // Cuántas piezas de ESTE elemento. Hoy solo lo usa la mesa de
+    // postres, donde el cliente puede pedir cantidades distintas por
+    // postre (ej. 45 tartas de nuez y 50 roscas). `null` significa "no
+    // especificado": el costeo entonces reparte el total en partes
+    // iguales, como se hacía antes.
+    cantidad: { type: Number, default: null, min: 0 },
   },
   { _id: false }
 );
