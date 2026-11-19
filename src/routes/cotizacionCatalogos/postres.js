@@ -5,6 +5,8 @@ const express = require("express");
 const crudFactory = require("./_crudFactory");
 const Cost = require("../../models/costs");
 const { costearPostreMesa } = require("../../utils/costeoPostreMesa");
+const { calcularEmpaque } = require("../../utils/empaque");
+const { getConfigPasarela } = require("../../utils/comisionPasarela");
 
 /**
  * Postres (mesa de postres) — CRUD + recosteo desde receta.
@@ -30,6 +32,7 @@ const crudRouter = crudFactory({
     "recetaId",
     "costoManual",
     "precioManual",
+    "empaque",
     "activo",
     "orden",
   ],
@@ -50,16 +53,42 @@ router.get("/costeo", checkRoleToken("admin"), async (req, res) => {
   try {
     const cfg = await Cost.findOne();
     const markup = cfg?.markupCotizacionesPct ?? cfg?.markupPostresPct ?? 60;
+
+    // Comisión de pasarela, vista POR PIEZA. Solo se aplica la parte
+    // porcentual: la cuota fija ($3 en Stripe) es por transacción, no por
+    // unidad, así que repartirla entre piezas daría un número inventado.
+    const pasarela = await getConfigPasarela();
+    const pctConIva = pasarela.activa
+      ? (pasarela.comisionPct / 100) * (1 + pasarela.ivaSobreComisionPct / 100)
+      : 0;
     const postres = await PostreCotiza.find().populate("recetaId").sort({ orden: 1 });
-    res.json({
-      markupGlobal: markup,
-      data: postres.map((p) => ({
+    const data = [];
+    for (const p of postres) {
+      const { total: costoEmpaque, detalle: empaqueDetalle } = await calcularEmpaque(p.empaque);
+      const costeo = costearPostreMesa(p, markup, costoEmpaque);
+
+      // Con `incluirEnPrecio` la comisión se SUMA al precio: el cliente
+      // paga más y la ganancia no se toca. Se reporta lo que acaba
+      // pagando y lo que se lleva la pasarela, para que el dato esté a la
+      // vista en vez de suponerlo.
+      const precioConComision = pctConIva > 0 && pctConIva < 1
+        ? Math.round((costeo.precioUnitario / (1 - pctConIva)) * 100) / 100
+        : costeo.precioUnitario;
+
+      data.push({
         _id: p._id,
         slug: p.slug,
         nombre: p.nombre,
-        ...costearPostreMesa(p, markup),
-      })),
-    });
+        empaqueDetalle,
+        ...costeo,
+        comisionActiva: pasarela.activa,
+        comisionProveedor: pasarela.proveedorNombre,
+        comisionPctUnitaria: Math.round(pctConIva * 1000) / 10,
+        precioConComision,
+        comisionUnitaria: Math.round((precioConComision - costeo.precioUnitario) * 100) / 100,
+      });
+    }
+    res.json({ markupGlobal: markup, data });
   } catch (e) {
     console.error("Error costeando catálogo de postres:", e);
     res.status(500).json({ message: e.message });

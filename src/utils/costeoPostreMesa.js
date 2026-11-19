@@ -16,7 +16,7 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * @param {Object} postre  doc de PostreCotiza, con `recetaId` poblado
  * @param {number} markupGlobal  porcentaje por defecto
  */
-function costearPostreMesa(postre, markupGlobal) {
+function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0) {
   const receta = postre?.recetaId;
   const tieneReceta = Boolean(receta && receta.portions > 0);
 
@@ -34,6 +34,11 @@ function costearPostreMesa(postre, markupGlobal) {
     margenPct = markupGlobal;
     fuente = "manual";
   }
+
+  // El empaque (contenedor, etiqueta) es costo del producto igual que los
+  // ingredientes: entra ANTES del margen, no se descuenta de la ganancia.
+  const empaque = Number(costoEmpaque) || 0;
+  unitario += empaque;
 
   const costoUnitario = round2(unitario);
 
@@ -60,6 +65,8 @@ function costearPostreMesa(postre, markupGlobal) {
     // periódicos (ej. una receta que rinde 3 o 7 porciones).
     costoUnitarioExacto: unitario,
     costoUnitario,
+    costoEmpaque: round2(empaque),
+    costoReceta: round2(unitario - empaque),
     margenPct: Number(margenPct) || 0,
     precioUnitario,
     gananciaUnitaria: round2(precioUnitario - costoUnitario),

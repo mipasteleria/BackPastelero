@@ -11,6 +11,7 @@ const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const { aplicarComisionAlPrecio } = require("../utils/comisionPasarela");
 const { costearPostreMesa } = require("../utils/costeoPostreMesa");
+const { calcularEmpaque } = require("../utils/empaque");
 const checkRoleToken = require("../middlewares/myRoleToken");
 const { requireAuth } = checkRoleToken;
 const { syncPersonalizadaCalendar } = require("../utils/pedidoCalendarSync");
@@ -622,8 +623,11 @@ router.post("/:id/calcular-costeo", checkRoleToken("admin"), async (req, res) =>
         // Mismo helper que usa la pantalla de catálogo, para que lo que
         // ve el admin al dar de alta el postre sea exactamente lo que se
         // cobra aquí. Ver src/utils/costeoPostreMesa.js.
+        // El empaque de cada postre entra al costo igual que en la
+        // pantalla de catálogo, para que ambos números coincidan.
+        const { total: costoEmpaquePostre } = await calcularEmpaque(p.empaque);
         const { costoUnitarioExacto: unitario, margenPct, fuente, precioFuente, precioUnitario } =
-          costearPostreMesa(p, markup);
+          costearPostreMesa(p, markup, costoEmpaquePostre);
         const piezasDeEste = piezasDe(p);
         const costo = round2(unitario * piezasDeEste);
         // Con precio fijado a mano se multiplica el precio por pieza, no

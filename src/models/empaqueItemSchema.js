@@ -20,9 +20,23 @@ const empaqueItemSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "insumos",
       default: null,
+      // Los formularios mandan "" cuando no se eligió insumo, y Mongoose
+      // no sabe convertir "" a ObjectId. Se normaliza aquí para que el
+      // saneo no dependa de que cada pantalla se acuerde de hacerlo.
+      set: (v) => (v === "" || v === undefined ? null : v),
     },
-    costoManual: { type: Number, default: 0, min: [0, "El costo no puede ser negativo"] },
-    cantidad: { type: Number, default: 1, min: [0, "La cantidad no puede ser negativa"] },
+    costoManual: {
+      type: Number,
+      default: 0,
+      min: [0, "El costo no puede ser negativo"],
+      set: (v) => (v === "" || v === null || v === undefined ? 0 : v),
+    },
+    cantidad: {
+      type: Number,
+      default: 1,
+      min: [0, "La cantidad no puede ser negativa"],
+      set: (v) => (v === "" || v === null || v === undefined ? 0 : v),
+    },
   },
   { _id: false }
 );

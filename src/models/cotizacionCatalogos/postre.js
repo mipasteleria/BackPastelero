@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const empaqueItemSchema = require("../empaqueItemSchema");
 
 /**
  * Postre individual para la cotización de "Mesa de postres".
@@ -57,6 +58,11 @@ const postreSchema = new mongoose.Schema(
     // `null` significa "calcula el precio con el margen", que es el
     // comportamiento de siempre.
     precioManual: { type: Number, default: null, min: 0 },
+
+    // Empaque de ESTE postre (contenedor, capacillo, etiqueta…), ligado a
+    // materia prima para que el costo se actualice solo. Mismo patrón que
+    // en Galletas NY y en el catálogo de postres del home.
+    empaque: { type: [empaqueItemSchema], default: [] },
 
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
