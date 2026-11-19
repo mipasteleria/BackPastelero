@@ -8,6 +8,8 @@ const VintagePedido = require("../models/vintage/pedido");
 const Cotizacion = require("../models/cotizacionPersonalizada");
 const Cost = require("../models/costs");
 const { desglosarCostos } = require("../utils/desgloseCostos");
+const { getConfigPasarela } = require("../utils/comisionPasarela");
+const { cobraComision, metodoSinRegistrar } = require("../utils/metodoPago");
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -92,7 +94,30 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
       vintage.reduce((s, p) => s + (p.total || 0), 0) +
       cotizaciones.filter((p) => p.costeoSnapshot?.costoTotal).reduce((s, p) => s + (p.precio || 0), 0)
     );
-    const gananciaNeta = round2(ingresosConCosto - costos);
+    // Comisión de pasarela realmente pagada: solo sobre lo cobrado con
+    // Stripe o terminal. En efectivo y transferencia no se paga nada, así
+    // que descontarla a todo por igual se inventaría un gasto.
+    const pasarela = await getConfigPasarela();
+    const pctComision = pasarela.activa
+      ? (pasarela.comisionPct / 100) * (1 + pasarela.ivaSobreComisionPct / 100)
+      : 0;
+
+    const conMetodo = [
+      ...vintage.map((p) => ({ metodo: p.anticipoMetodo, monto: p.total || 0 })),
+      ...cotizaciones.map((p) => ({ metodo: p.anticipoMetodo, monto: p.precio || 0 })),
+      // Galletas y postres se cobran en línea, así que siempre llevan comisión.
+      ...galletas.map((p) => ({ metodo: "stripe", monto: p.total || 0 })),
+      ...postres.map((p) => ({ metodo: "stripe", monto: p.total || 0 })),
+    ];
+
+    const comisionPagada = round2(
+      conMetodo.filter((x) => cobraComision(x.metodo)).reduce((a, x) => a + x.monto * pctComision, 0)
+    );
+    const ventasSinRegistrar = round2(
+      conMetodo.filter((x) => metodoSinRegistrar(x.metodo)).reduce((a, x) => a + x.monto, 0)
+    );
+
+    const gananciaNeta = round2(ingresosConCosto - costos - comisionPagada);
 
     // ── Top productos vendidos ──
     const conteo = {};
@@ -131,6 +156,9 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
           gananciaNeta,           // sobre los pedidos con costo registrado
           ingresosConCosto,       // base de la neta (transparencia)
           desgloseCostos,         // en qué se va el costo + cobertura
+          comisionPagada,         // solo sobre lo cobrado con tarjeta
+          ventasSinRegistrar,     // ventas sin método de pago capturado
+          comisionPct: Math.round(pctComision * 1000) / 10,
           topProductos,
         },
       },

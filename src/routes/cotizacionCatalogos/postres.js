@@ -65,15 +65,15 @@ router.get("/costeo", checkRoleToken("admin"), async (req, res) => {
     const data = [];
     for (const p of postres) {
       const { total: costoEmpaque, detalle: empaqueDetalle } = await calcularEmpaque(p.empaque);
-      const costeo = costearPostreMesa(p, markup, costoEmpaque);
+      const costeo = costearPostreMesa(p, markup, costoEmpaque, pctConIva);
 
-      // Con `incluirEnPrecio` la comisión se SUMA al precio: el cliente
-      // paga más y la ganancia no se toca. Se reporta lo que acaba
-      // pagando y lo que se lleva la pasarela, para que el dato esté a la
-      // vista en vez de suponerlo.
-      const precioConComision = pctConIva > 0 && pctConIva < 1
-        ? Math.round((costeo.precioUnitario / (1 - pctConIva)) * 100) / 100
-        : costeo.precioUnitario;
+      // La ganancia que devuelve el helper ya viene neta de comisión
+      // (el precio fijado es el final que paga el cliente). Se expone
+      // además la ganancia SIN comisión, que es la real cuando pagan en
+      // efectivo o por transferencia.
+      const gananciaEfectivo = Math.round(
+        (costeo.gananciaUnitaria + (costeo.comisionUnitaria || 0)) * 100
+      ) / 100;
 
       data.push({
         _id: p._id,
@@ -84,8 +84,7 @@ router.get("/costeo", checkRoleToken("admin"), async (req, res) => {
         comisionActiva: pasarela.activa,
         comisionProveedor: pasarela.proveedorNombre,
         comisionPctUnitaria: Math.round(pctConIva * 1000) / 10,
-        precioConComision,
-        comisionUnitaria: Math.round((precioConComision - costeo.precioUnitario) * 100) / 100,
+        gananciaEfectivo,
       });
     }
     res.json({ markupGlobal: markup, data });

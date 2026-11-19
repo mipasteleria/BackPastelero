@@ -16,7 +16,7 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * @param {Object} postre  doc de PostreCotiza, con `recetaId` poblado
  * @param {number} markupGlobal  porcentaje por defecto
  */
-function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0) {
+function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0, comisionPct = 0) {
   const receta = postre?.recetaId;
   const tieneReceta = Boolean(receta && receta.portions > 0);
 
@@ -52,9 +52,16 @@ function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0) {
     ? round2(precioFijado)
     : round2(unitario * (1 + (Number(margenPct) || 0) / 100));
 
+  // Con precio fijado, ese precio es el FINAL que paga el cliente, así
+  // que la comisión de la pasarela sale de la ganancia. Cuando el precio
+  // lo calcula el margen es al revés: se cobra de más para que la
+  // comisión no se coma el margen (ver comisionPasarela.js).
+  const pct = hayPrecioManual ? Math.max(0, Number(comisionPct) || 0) : 0;
+  const comisionUnitaria = round2(precioUnitario * pct);
+
   if (hayPrecioManual) {
     margenPct = costoUnitario > 0
-      ? Math.round(((precioUnitario - costoUnitario) / costoUnitario) * 100)
+      ? Math.round(((precioUnitario - comisionUnitaria - costoUnitario) / costoUnitario) * 100)
       : 0;
   }
 
@@ -69,7 +76,9 @@ function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0) {
     costoReceta: round2(unitario - empaque),
     margenPct: Number(margenPct) || 0,
     precioUnitario,
-    gananciaUnitaria: round2(precioUnitario - costoUnitario),
+    // Neta: precio menos costo menos lo que se lleva la pasarela.
+    gananciaUnitaria: round2(precioUnitario - comisionUnitaria - costoUnitario),
+    comisionUnitaria,
     fuente,
     // De dónde salió el precio y el margen, para explicarlo en pantalla.
     precioFuente: hayPrecioManual ? "manual" : "margen",
