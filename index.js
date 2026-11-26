@@ -69,6 +69,11 @@ app.use(cors(corsOptions));
 
 // Rate-limit global suave + registro de accesos denegados (401/403).
 app.use(globalLimiter);
+
+// Renovación deslizante de sesión: refresca el token de quien está
+// activo para que no lo saque a mitad del trabajo. Ver el middleware.
+const { renovarTokenSiExpira } = require("./src/middlewares/renovarToken");
+app.use(renovarTokenSiExpira);
 app.use(logForbidden);
 
 // Esperar a que MongoDB esté conectado antes de procesar requests.

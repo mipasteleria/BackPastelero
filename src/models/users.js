@@ -91,7 +91,14 @@ const userSchema = new mongoose.Schema(
         }
       },
       createToken: async function (payload) {
-        return jwt.sign(payload, process.env.JWT_SIGN, { expiresIn: "1h" });
+        // 8 h = un turno de trabajo. Antes era 1 h sin forma de
+        // renovar, así que a la hora exacta sacaba al usuario aunque
+        // estuviera trabajando. En el mostrador eso corta un cobro a la
+        // mitad. Además, `renovarTokenSiExpira` lo refresca con cada
+        // petición cuando ya pasó la mitad de su vida: quien está
+        // activo no se queda fuera nunca, y una sesión olvidada muere
+        // al terminar el turno.
+        return jwt.sign(payload, process.env.JWT_SIGN, { expiresIn: "8h" });
       },
     },
   }
