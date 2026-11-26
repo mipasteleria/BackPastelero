@@ -22,8 +22,8 @@ router.post('/', checkRoleToken('admin'), async (req, res) => {
   }
 });
 
-// Obtener un costo por ID (GET)
-router.get('/:id', async (req, res) => {
+// Obtener un costo por ID (GET) — solo admin: expone tarifas y markups.
+router.get('/:id', checkRoleToken('admin'), async (req, res) => {
   try {
     const { id } = req.params;
     const cost = await Cost.findById(id);
@@ -66,8 +66,12 @@ router.put('/:id', checkRoleToken('admin'), async (req, res) => {
   }
 });
 
-// Obtener el único documento de costos sin conocer su ID
-router.get('/', async (req, res) => {
+// Obtener el único documento de costos sin conocer su ID.
+//
+// Requiere admin: devuelve las tarifas por hora, los markups y la
+// configuración de comisiones. Era público, de modo que cualquiera con
+// la URL de la API podía leer la estructura de precios del negocio.
+router.get('/', checkRoleToken('admin'), async (req, res) => {
   try {
     const cost = await Cost.findOne();
     if (!cost) return res.status(404).json({ message: "No hay costos configurados" });

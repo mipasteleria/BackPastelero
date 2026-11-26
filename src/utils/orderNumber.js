@@ -24,7 +24,7 @@ const MESES_ABREV = [
   "JUL", "AGO", "SEP", "OCT", "NOV", "DIC",
 ];
 
-const PREFIJOS_VALIDOS = new Set(["GNY", "PAS", "CUP", "SNA", "VIN", "POS", "GAL"]);
+const PREFIJOS_VALIDOS = new Set(["GNY", "PAS", "CUP", "SNA", "VIN", "POS", "GAL", "MOS"]);
 
 async function generarNumeroOrden(prefijo) {
   const pfx = String(prefijo || "").toUpperCase();

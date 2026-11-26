@@ -2,7 +2,11 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
-const roles = ["user", "admin"];
+// "empleado": personal de mostrador. Entra al dashboard pero SOLO al
+// punto de venta — no ve costos, recetas, cotizaciones ni gastos. Se
+// agregó al abrir el local con personal que cobra pero no debe ver los
+// márgenes del negocio.
+const roles = ["user", "admin", "empleado"];
 
 const userSchema = new mongoose.Schema(
   {

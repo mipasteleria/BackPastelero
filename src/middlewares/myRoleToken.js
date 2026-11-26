@@ -16,8 +16,13 @@ const checkRoleToken = (requiredRole) => (req, res, next) => {
 
     req.user = decoded;
 
-    if (requiredRole && decoded.role !== requiredRole) {
-      return res.status(403).json({ message: "User not authorized" });
+    // Acepta un rol o una lista: el punto de venta lo usan admin y
+    // empleado, y repetir la ruta por cada rol era peor.
+    if (requiredRole) {
+      const permitidos = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+      if (!permitidos.includes(decoded.role)) {
+        return res.status(403).json({ message: "User not authorized" });
+      }
     }
 
     next();

@@ -109,7 +109,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
  * El front lo consume al agregar una sub-receta para mostrar el costo
  * proporcional en tiempo real y guardar el snapshot.
  */
-router.get("/costo-unitario/:id", async (req, res) => {
+router.get("/costo-unitario/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const r = await Receta.findById(req.params.id).select("nombre_receta portions total_cost unidadRendimiento");
     if (!r) return res.status(404).send({ message: "Receta no encontrada" });
@@ -132,7 +132,9 @@ router.get("/costo-unitario/:id", async (req, res) => {
 });
 
 // Obtener todas las recetas (GET)
-router.get("/", async (req, res) => {
+// Solo admin: el listado trae `total_cost`, `profit_margin` y los
+// ingredientes con sus precios. Era público.
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const recetas = await Receta.find();
     res.status(200).send({ data: recetas });
@@ -143,7 +145,7 @@ router.get("/", async (req, res) => {
 });
 
 // Obtener una receta por ID (GET)
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const receta = await Receta.findById(id);

@@ -6,6 +6,7 @@ const GalletaPedido = require("../models/galletaPedido");
 const PostrePedido = require("../models/postrePedido");
 const VintagePedido = require("../models/vintage/pedido");
 const Cotizacion = require("../models/cotizacionPersonalizada");
+const VentaMostrador = require("../models/ventaMostrador");
 const Cost = require("../models/costs");
 const { desglosarCostos } = require("../utils/desgloseCostos");
 const { getConfigPasarela } = require("../utils/comisionPasarela");
@@ -55,12 +56,14 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
     const enMes = (campo) => ({ [campo]: { $gte: ini, $lt: fin } });
     const diaISO = (d) => new Date(d).toISOString().slice(0, 10);
 
-    const [galletas, postres, vintage, cotizaciones, bloqueadas] = await Promise.all([
+    const [galletas, postres, vintage, cotizaciones, bloqueadas, mostrador] = await Promise.all([
       GalletaPedido.find({ ...enMes("fechaEntrega"), estadoPago: "paid" }),
       PostrePedido.find({ ...enMes("fechaEntrega"), estadoPago: "paid" }),
       VintagePedido.find({ ...enMes("fecha"), status: { $regex: /^(Agendado|Entregado)/ } }),
       Cotizacion.find({ ...enMes("evento.fecha"), status: { $regex: /^(Agendado|Entregado)/ } }),
       FechaBloqueada.find({ fecha: { $gte: `${mes}-01`, $lt: fin.toISOString().slice(0, 10) } }),
+      // Ventas de mostrador del mes (las canceladas no cuentan).
+      VentaMostrador.find({ ...enMes("createdAt"), cancelada: { $ne: true } }).lean(),
     ]);
 
     // ── Eventos por día para el calendario ──
@@ -81,18 +84,30 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
       galletas.reduce((s, p) => s + (p.total || 0), 0) +
       postres.reduce((s, p) => s + (p.total || 0), 0) +
       vintage.reduce((s, p) => s + (p.total || 0), 0) +
-      cotizaciones.reduce((s, p) => s + (p.precio || 0), 0)
+      cotizaciones.reduce((s, p) => s + (p.precio || 0), 0) +
+      mostrador.reduce((s, v) => s + (v.total || 0), 0)
     );
     // Costos conocidos: vintage.totalCosto + costeoSnapshot.costoTotal de
     // cotizaciones. Galletas/postres no registran costo — se reporta la
     // cobertura para transparencia.
+    // Costo de una venta de mostrador: solo los renglones con costo
+    // congelado. Un concepto libre no tiene costo conocido, y la venta
+    // entonces aporta al ingreso pero no a la neta.
+    const costoMostrador = (v) =>
+      (v.items || []).reduce((a, i) => a + (i.costoUnitario != null ? i.costoUnitario * i.cantidad : 0), 0);
+    const mostradorConCosto = mostrador.filter(
+      (v) => (v.items || []).every((i) => i.costoUnitario != null)
+    );
+
     const costos = round2(
       vintage.reduce((s, p) => s + (p.totalCosto || 0), 0) +
-      cotizaciones.reduce((s, p) => s + (p.costeoSnapshot?.costoTotal || 0), 0)
+      cotizaciones.reduce((s, p) => s + (p.costeoSnapshot?.costoTotal || 0), 0) +
+      mostradorConCosto.reduce((s, v) => s + costoMostrador(v), 0)
     );
     const ingresosConCosto = round2(
       vintage.reduce((s, p) => s + (p.total || 0), 0) +
-      cotizaciones.filter((p) => p.costeoSnapshot?.costoTotal).reduce((s, p) => s + (p.precio || 0), 0)
+      cotizaciones.filter((p) => p.costeoSnapshot?.costoTotal).reduce((s, p) => s + (p.precio || 0), 0) +
+      mostradorConCosto.reduce((s, v) => s + (v.total || 0), 0)
     );
     // Comisión de pasarela realmente pagada: solo sobre lo cobrado con
     // Stripe o terminal. En efectivo y transferencia no se paga nada, así
@@ -108,6 +123,9 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
       // Galletas y postres se cobran en línea, así que siempre llevan comisión.
       ...galletas.map((p) => ({ metodo: "stripe", monto: p.total || 0 })),
       ...postres.map((p) => ({ metodo: "stripe", monto: p.total || 0 })),
+      // Mostrador: la terminal de Mercado Pago cobra comisión; el
+      // efectivo entra completo.
+      ...mostrador.map((v) => ({ metodo: v.metodoPago === "terminal" ? "terminal" : "efectivo", monto: v.total || 0 })),
     ];
 
     const comisionPagada = round2(
@@ -133,6 +151,10 @@ router.get("/dashboard-agenda", checkRoleToken("admin"), async (req, res) => {
       p.tipoProducto === "cupcake" ? "Cupcakes personalizados" : p.tipoProducto === "mesa-postres" ? "Mesa de postres" : p.tipoProducto === "galleta" ? "Galletas decoradas" : "Pastel personalizado",
       1,
       p.tipoProducto === "cupcake" ? "🧁" : p.tipoProducto === "mesa-postres" ? "🍰" : p.tipoProducto === "galleta" ? "🍪" : "🎂"
+    ));
+    // Mostrador: cuenta por renglón, con el icono según el tipo.
+    mostrador.forEach((v) => (v.items || []).forEach((it) =>
+      add(it.nombre, it.cantidad, it.tipo === "galleta-ny" ? "🍪" : it.tipo === "postre" ? "🍮" : "🧾")
     ));
     const topProductos = Object.entries(conteo).map(([nombre, cantidad]) => ({ nombre, cantidad }))
       .sort((a, b) => b.cantidad - a.cantidad).slice(0, 8);

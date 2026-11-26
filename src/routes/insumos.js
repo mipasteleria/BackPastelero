@@ -75,7 +75,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
 // `nameNormalized`. Devuelve siempre 200 (lista vacía si no hay match).
 // No requiere autenticación porque solo lee; si más adelante hay info
 // sensible en insumos, agregar checkRoleToken.
-router.get("/buscar-similares", async (req, res) => {
+router.get("/buscar-similares", checkRoleToken("admin"), async (req, res) => {
   try {
     const q = String(req.query.q || "").trim();
     if (!q) return res.status(200).send({ data: [] });
@@ -95,7 +95,8 @@ router.get("/buscar-similares", async (req, res) => {
 });
 
 // Obtener todos los Insumos (GET)
-router.get("/", async (req, res) => {
+// Solo admin: cada insumo trae su costo de compra. Era público.
+router.get("/", checkRoleToken("admin"), async (req, res) => {
   try {
     const insumos = await Insumos.find(); // Obtener todos los documentos
     res.status(200).send(insumos);
@@ -104,7 +105,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/nombres", async (req, res) => {
+router.get("/nombres", checkRoleToken("admin"), async (req, res) => {
   try {
     // Obtener solo los nombres de los documentos
     const nombres = await Insumos.find({}, "name"); // Obtener solo el campo 'name'
@@ -115,7 +116,7 @@ router.get("/nombres", async (req, res) => {
 });
 
 // Obtener un Insumo por ID (GET)
-router.get("/:id", async (req, res) => {
+router.get("/:id", checkRoleToken("admin"), async (req, res) => {
   try {
     const { id } = req.params;
     const insumo = await Insumos.findById(id);
