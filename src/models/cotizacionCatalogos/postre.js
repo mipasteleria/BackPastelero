@@ -64,6 +64,12 @@ const postreSchema = new mongoose.Schema(
     // en Galletas NY y en el catálogo de postres del home.
     empaque: { type: [empaqueItemSchema], default: [] },
 
+
+    // ¿Se puede vender en el mostrador? Permite que un producto exista
+    // en su catálogo (para cotizar o para la tienda en línea) sin
+    // aparecer en el punto de venta, y al revés.
+    enPuntoDeVenta: { type: Boolean, default: true },
+
     activo: { type: Boolean, default: true },
     orden:  { type: Number, default: 0 },
   },

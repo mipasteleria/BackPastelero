@@ -209,7 +209,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
     const {
       slug, nombre, descripcion, precio, stock,
       imagen, emoji, bg, tag, tagColor, tagText,
-      esTemporada, activo, orden,
+      esTemporada, activo, orden, enPuntoDeVenta,
       recetaId, empaque,
     } = req.body;
 
@@ -245,6 +245,7 @@ router.post("/", checkRoleToken("admin"), async (req, res) => {
       tagText:     tagText || "",
       esTemporada: !!esTemporada,
       activo:      activo !== false,
+      enPuntoDeVenta: enPuntoDeVenta !== false,
       orden:       Number(orden) || 0,
       recetaId:    recetaId || null,
       empaque:     Array.isArray(empaque) ? empaque : [],

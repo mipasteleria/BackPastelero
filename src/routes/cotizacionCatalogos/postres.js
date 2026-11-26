@@ -33,6 +33,7 @@ const crudRouter = crudFactory({
     "costoManual",
     "precioManual",
     "empaque",
+    "enPuntoDeVenta",
     "activo",
     "orden",
   ],

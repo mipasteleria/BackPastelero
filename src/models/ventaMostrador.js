@@ -18,8 +18,8 @@ const mongoose = require("mongoose");
 
 const itemSchema = new mongoose.Schema(
   {
-    // "galleta-ny" | "postre" | "libre"
-    tipo: { type: String, required: true, enum: ["galleta-ny", "postre", "libre"] },
+    // "galleta-ny" | "postre" | "postre-mesa" | "libre"
+    tipo: { type: String, required: true, enum: ["galleta-ny", "postre", "postre-mesa", "libre"] },
     // Referencia al catálogo. Null en los conceptos libres.
     refId: { type: mongoose.Schema.Types.ObjectId, default: null },
     slug: { type: String, default: "" },

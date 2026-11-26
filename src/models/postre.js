@@ -99,6 +99,12 @@ const postreSchema = new mongoose.Schema(
 
     // Soft-delete: activo=false oculta del catálogo público pero conserva
     // historial para reportes y pedidos antiguos que referencien el postre.
+
+    // ¿Se puede vender en el mostrador? Permite que un producto exista
+    // en su catálogo (para cotizar o para la tienda en línea) sin
+    // aparecer en el punto de venta, y al revés.
+    enPuntoDeVenta: { type: Boolean, default: true },
+
     activo:    { type: Boolean, default: true },
     destacado: { type: Boolean, default: false },
 

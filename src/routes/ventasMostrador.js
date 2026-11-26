@@ -3,6 +3,9 @@ const router = express.Router();
 const VentaMostrador = require("../models/ventaMostrador");
 const GalletaSabor = require("../models/galletaSabor");
 const Postre = require("../models/postre");
+const PostreMesa = require("../models/cotizacionCatalogos/postre");
+const { costearPostreMesa } = require("../utils/costeoPostreMesa");
+const { calcularEmpaque } = require("../utils/empaque");
 const Receta = require("../models/recetas/recetas");
 const Cost = require("../models/costs");
 const { generarNumeroOrden } = require("../utils/orderNumber");
@@ -23,10 +26,34 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  */
 router.get("/catalogo", MOSTRADOR, async (req, res) => {
   try {
-    const [galletas, postres] = await Promise.all([
-      GalletaSabor.find({ activo: true }).select("slug nombre precio stock emoji imagen").sort({ orden: 1 }).lean(),
-      Postre.find({ activo: true }).select("slug nombre precio imagenUrl categoria unidad").sort({ orden: 1 }).lean(),
+    // Solo lo marcado para mostrador. `$ne: false` incluye los
+    // documentos viejos que aún no tienen el campo.
+    const enPOS = { activo: true, enPuntoDeVenta: { $ne: false } };
+
+    const [galletas, postres, mesa, cfg] = await Promise.all([
+      GalletaSabor.find(enPOS).select("slug nombre precio stock emoji imagen").sort({ orden: 1 }).lean(),
+      Postre.find(enPOS).select("slug nombre precio imagenUrl categoria unidad").sort({ orden: 1 }).lean(),
+      PostreMesa.find(enPOS).populate("recetaId").sort({ orden: 1 }),
+      Cost.findOne().lean(),
     ]);
+
+    const markup = cfg?.markupCotizacionesPct ?? cfg?.markupPostresPct ?? 60;
+
+    // Los postres de mesa no guardan un precio plano: sale del costeo
+    // (precio fijado a mano, o costo con su margen). Se calcula aquí y
+    // se manda SOLO el precio — esta pantalla la opera el mostrador y
+    // no debe ver costos.
+    const mesaItems = [];
+    for (const p of mesa) {
+      const { total: costoEmpaque } = await calcularEmpaque(p.empaque);
+      const { precioUnitario } = costearPostreMesa(p, markup, costoEmpaque);
+      mesaItems.push({
+        tipo: "postre-mesa", refId: p._id, slug: p.slug, nombre: p.nombre,
+        precio: precioUnitario, stock: null, emoji: p.emoji || "🍰",
+        imagen: p.imagenUrl || "",
+      });
+    }
+
     res.json({
       data: {
         galletas: galletas.map((g) => ({
@@ -38,6 +65,7 @@ router.get("/catalogo", MOSTRADOR, async (req, res) => {
           precio: p.precio, stock: null, imagen: p.imagenUrl || "",
           categoria: p.categoria || "postre", unidad: p.unidad || "pieza",
         })),
+        postresMesa: mesaItems,
       },
     });
   } catch (e) {
@@ -57,6 +85,13 @@ async function costoUnitarioDe(item, cfg) {
         if (r?.portions > 0) return round2(r.total_cost / r.portions + (cfg?.costoBrandingPorGalleta || 0));
       }
       return g.costoUnitarioSnapshot ?? null;
+    }
+    if (item.tipo === "postre-mesa") {
+      const p = await PostreMesa.findById(item.refId).populate("recetaId");
+      if (!p) return null;
+      const { total: costoEmpaque } = await calcularEmpaque(p.empaque);
+      const markup = cfg?.markupCotizacionesPct ?? cfg?.markupPostresPct ?? 60;
+      return costearPostreMesa(p, markup, costoEmpaque).costoUnitario;
     }
     if (item.tipo === "postre") {
       const p = await Postre.findById(item.refId).select("recetaId cantidadReceta costoEmpaque").lean();
@@ -112,16 +147,34 @@ router.post("/", MOSTRADOR, async (req, res) => {
         continue;
       }
 
-      const Modelo = it.tipo === "galleta-ny" ? GalletaSabor : Postre;
-      const doc = await Modelo.findById(it.refId).lean();
-      if (!doc || doc.activo === false) {
-        return res.status(400).json({ message: `Producto no disponible: ${it.nombre || it.refId}` });
+      // Los postres de mesa no tienen un campo `precio`: su precio sale
+      // del costeo, igual que al cotizar. Se resuelve aquí para que el
+      // mostrador cobre exactamente lo mismo.
+      let doc;
+      let precio;
+      if (it.tipo === "postre-mesa") {
+        const pm = await PostreMesa.findById(it.refId).populate("recetaId");
+        if (!pm || pm.activo === false) {
+          return res.status(400).json({ message: `Producto no disponible: ${it.nombre || it.refId}` });
+        }
+        const { total: costoEmpaque } = await calcularEmpaque(pm.empaque);
+        const markup = cfg?.markupCotizacionesPct ?? cfg?.markupPostresPct ?? 60;
+        doc = pm;
+        precio = costearPostreMesa(pm, markup, costoEmpaque).precioUnitario;
+      } else {
+        const Modelo = it.tipo === "galleta-ny" ? GalletaSabor : Postre;
+        doc = await Modelo.findById(it.refId).lean();
+        if (!doc || doc.activo === false) {
+          return res.status(400).json({ message: `Producto no disponible: ${it.nombre || it.refId}` });
+        }
+        precio = doc.precio;
       }
+
       const costoUnitario = await costoUnitarioDe({ tipo: it.tipo, refId: it.refId }, cfg);
       items.push({
         tipo: it.tipo, refId: doc._id, slug: doc.slug, nombre: doc.nombre,
-        precioUnitario: round2(doc.precio), cantidad,
-        subtotal: round2(doc.precio * cantidad), costoUnitario,
+        precioUnitario: round2(precio), cantidad,
+        subtotal: round2(precio * cantidad), costoUnitario,
       });
     }
 

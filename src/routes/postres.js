@@ -126,6 +126,7 @@ const CAMPOS_EDITABLES = [
   "imagenFileName",
   "activo",
   "destacado",
+  "enPuntoDeVenta",
   "orden",
   "recetaId",
   "cantidadReceta",

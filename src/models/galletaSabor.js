@@ -53,6 +53,12 @@ const galletaSaborSchema = new mongoose.Schema(
 
     // Banderas
     esTemporada: { type: Boolean, default: false },  // Edición limitada / sabor de temporada
+
+    // ¿Se puede vender en el mostrador? Permite que un producto exista
+    // en su catálogo (para cotizar o para la tienda en línea) sin
+    // aparecer en el punto de venta, y al revés.
+    enPuntoDeVenta: { type: Boolean, default: true },
+
     activo:      { type: Boolean, default: true },   // Soft-delete: false oculta del catálogo
 
     orden: { type: Number, default: 0 },              // Para ordenar en el frontend
