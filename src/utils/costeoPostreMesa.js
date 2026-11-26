@@ -48,9 +48,13 @@ function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0, comisionPct =
   const precioFijado = Number(postre?.precioManual);
   const hayPrecioManual = Number.isFinite(precioFijado) && precioFijado > 0;
 
-  const precioUnitario = hayPrecioManual
-    ? round2(precioFijado)
-    : round2(unitario * (1 + (Number(margenPct) || 0) / 100));
+  // El sugerido se calcula SIEMPRE, aunque ya haya precio fijo: la
+  // pantalla lo ofrece como referencia y con un botón para adoptarlo,
+  // igual que el catálogo de postres del home.
+  const margenSugerido = Number(margenPct) || 0;
+  const precioSugerido = round2(unitario * (1 + margenSugerido / 100));
+
+  const precioUnitario = hayPrecioManual ? round2(precioFijado) : precioSugerido;
 
   // Con precio fijado, ese precio es el FINAL que paga el cliente, así
   // que la comisión de la pasarela sale de la ganancia. Cuando el precio
@@ -73,6 +77,9 @@ function costearPostreMesa(postre, markupGlobal, costoEmpaque = 0, comisionPct =
     costoUnitarioExacto: unitario,
     costoUnitario,
     costoEmpaque: round2(empaque),
+    // Referencia: lo que costaría con el margen, exista o no precio fijo.
+    precioSugerido,
+    margenSugerido,
     costoReceta: round2(unitario - empaque),
     margenPct: Number(margenPct) || 0,
     precioUnitario,
