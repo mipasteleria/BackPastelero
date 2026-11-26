@@ -164,6 +164,33 @@ router.get("/producto/:tipo/:productoId", async (req, res) => {
  * Reseñas para mostrar en el home: visibles, rating 5, las más recientes.
  * `?limit=N` (default 3).
  */
+/**
+ * GET /resenas/resumen — público.
+ *
+ * Total y promedio de las reseñas visibles. Existe porque el home traía
+ * "4.9★ · 458 reseñas" escrito a mano cuando en realidad había 2: un dato
+ * inventado presentado como hecho, igual que los testimonios de ejemplo
+ * que ya se habían quitado.
+ */
+router.get("/resumen", async (req, res) => {
+  try {
+    const [r] = await Resena.aggregate([
+      { $match: { visible: true } },
+      { $group: { _id: null, total: { $sum: 1 }, suma: { $sum: "$rating" } } },
+    ]);
+    const total = r?.total || 0;
+    res.json({
+      data: {
+        total,
+        promedio: total > 0 ? Math.round((r.suma / total) * 10) / 10 : 0,
+      },
+    });
+  } catch (e) {
+    console.error("Error obteniendo resumen de reseñas:", e);
+    res.status(500).json({ message: e.message });
+  }
+});
+
 router.get("/destacadas", async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 3, 20);

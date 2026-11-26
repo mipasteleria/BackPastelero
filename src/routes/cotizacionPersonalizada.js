@@ -308,10 +308,29 @@ router.get("/public/:token", async (req, res) => {
     const doc = await CotizacionPersonalizada.findOne({ publicToken: req.params.token }).select(PROJ_PUBLICA);
     if (!doc) return res.status(404).json({ message: "Cotización no encontrada" });
 
+    // Desglose de la mesa para el cliente: qué postre, cuántas piezas y a
+    // cuánto. Se arma leyendo el costeo APARTE, porque `PROJ_PUBLICA` lo
+    // excluye entero y debe seguir excluyéndolo: aquí solo salen precios,
+    // nunca costos ni márgenes.
+    let postresDesglose = null;
+    if (doc.tipoProducto === "mesa-postres") {
+      const conCosteo = await CotizacionPersonalizada
+        .findById(doc._id).select("costeoSnapshot.postres").lean();
+      const filas = conCosteo?.costeoSnapshot?.postres || [];
+      if (filas.length) {
+        postresDesglose = filas.map((p) => ({
+          nombre: p.nombre,
+          piezas: p.piezas,
+          precio: p.precio,
+          precioUnitario: p.piezas > 0 ? Math.round((p.precio / p.piezas) * 100) / 100 : null,
+        }));
+      }
+    }
+
     // Si ya calificó, se devuelve para que el formulario aparezca prellenado
     // en vez de pedirle la reseña otra vez.
     const resena = await resenaDePedido(doc._id, "cotizacion");
-    res.json({ data: doc, resena });
+    res.json({ data: doc, resena, postresDesglose });
   } catch (e) {
     console.error("Error obteniendo cotización pública:", e);
     res.status(500).json({ message: e.message });
